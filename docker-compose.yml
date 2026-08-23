@@ -16,8 +16,8 @@ services:
   #   image: postgis/postgis:16-3.4
   #   environment:
   #     POSTGRES_DB: flowsense
-  #     POSTGRES_USER: flowsense
-  #     POSTGRES_PASSWORD: changeme
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
   #   volumes:
   #     - pgdata:/var/lib/postgresql/data
   #   ports:
