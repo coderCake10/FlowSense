@@ -1,0 +1,4264 @@
+openapi: 3.0.3
+info:
+  title: FlowSense API
+  description: >
+    REST API for FlowSense, an indoor/outdoor campus wayfinding system for AUF.
+    Serves three clients (Kiosk, Mobile Companion, Admin Dashboard) via a
+    versioned, feature-based, role-aware API. Public endpoints (map, navigation,
+    search, sessions) require no authentication; administrative endpoints
+    (annotation, hardware, assets, analytics, users, settings) require an
+    authenticated admin session. ESP32 sensors never call this REST API —
+    they publish exclusively over MQTT.
+  version: "1.0.0"
+servers:
+  - url: /api/v1
+    description: Versioned API root
+
+tags:
+  - name: Authentication
+    description: Passwordless administrator authentication
+  - name: Map
+    description: Static campus spatial data (buildings, floors, rooms, nodes)
+  - name: Navigation
+    description: Route calculation and retrieval
+  - name: Search
+    description: Destination and personnel search
+  - name: Navigation Sessions
+    description: Kiosk-side multi-destination navigation session lifecycle
+  - name: QR Sessions
+    description: QR-code based mobile handoff sessions
+  - name: Kiosk Sessions
+    description: Kiosk interaction session lifecycle
+  - name: Annotation
+    description: CRUD for map annotations, nodes, edges, and transitions
+  - name: Hardware
+    description: Device registry for kiosks and ESP32 sensors
+  - name: Assets
+    description: 3D building model asset upload, versioning, and validation
+  - name: Analytics
+    description: Dashboard statistics and generated reports
+  - name: Alerts
+    description: System and operational alerts
+  - name: Activity
+    description: Administrative audit trail
+  - name: Users
+    description: Administrator account management
+  - name: Settings
+    description: Site-wide configuration and academic semesters
+  - name: System
+    description: System health and status
+
+security:
+  - AdminSessionCookie: []
+
+paths:
+  # ------------------------------------------------------------------
+  # AUTHENTICATION
+  # ------------------------------------------------------------------
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Initiate passwordless authentication
+      description: Initiates passwordless authentication flow by sending an OTP and/or login link to the administrator's institutional email.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Challenge created and delivered via email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /auth/verify:
+    post:
+      tags: [Authentication]
+      summary: Verify OTP or login link
+      description: Verifies the provided OTP code or login link token and establishes an admin session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challenge_id]
+              properties:
+                challenge_id:
+                  type: integer
+                  format: int64
+                otp_code:
+                  type: string
+                login_token:
+                  type: string
+      responses:
+        "200":
+          description: Session established
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminUser"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Log out
+      description: Invalidates the current authenticated admin session.
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessNoData"
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current administrator
+      description: Retrieves the profile, role, and identity of the currently logged-in administrator.
+      responses:
+        "200":
+          description: Current administrator profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/session:
+    get:
+      tags: [Authentication]
+      summary: Check session status
+      description: Checks the status and validity of the current admin session.
+      responses:
+        "200":
+          description: Session status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminSession"
+
+  # ------------------------------------------------------------------
+  # MAP
+  # ------------------------------------------------------------------
+  /map/context:
+    get:
+      tags: [Map]
+      summary: Get campus spatial context
+      description: Retrieves overall campus spatial context and coordinate configuration.
+      security: []
+      responses:
+        "200":
+          description: Campus spatial context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /map/areas:
+    get:
+      tags: [Map]
+      summary: List areas
+      description: Retrieves a list of all configured buildings and areas.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AreaTypeFilter"
+      responses:
+        "200":
+          description: List of areas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AreaListResponse"
+    post:
+      tags: [Map]
+      summary: Create area
+      description: Creates a new building or campus area entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AreaInput"
+      responses:
+        "201":
+          description: Area created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AreaResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /map/areas/{id}:
+    get:
+      tags: [Map]
+      summary: Get area
+      description: Retrieves metadata and configuration details for a specific building/area.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Area detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AreaResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Map]
+      summary: Update area
+      description: Updates metadata for a specific building/area.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AreaInput"
+      responses:
+        "200":
+          description: Area updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AreaResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Map]
+      summary: Delete area
+      description: Removes a specific building/area from the system.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessNoData"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /map/areas/{id}/floors:
+    get:
+      tags: [Map]
+      summary: List floors for area
+      description: Retrieves all floors associated with a specific building/area.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: List of floors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FloorListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /map/floors/{id}:
+    get:
+      tags: [Map]
+      summary: Get floor
+      description: Retrieves metadata and elevation details for a specific floor.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Floor detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FloorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /map/rooms:
+    get:
+      tags: [Map]
+      summary: List rooms
+      description: Retrieves a list of all mapped rooms.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/FloorIdFilter"
+        - $ref: "#/components/parameters/AreaIdFilter"
+        - name: room_type
+          in: query
+          schema:
+            $ref: "#/components/schemas/RoomType"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of rooms
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomListResponse"
+
+  /map/rooms/{id}:
+    get:
+      tags: [Map]
+      summary: Get room
+      description: Retrieves details for a specific room.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Room detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /map/rooms/{id}/personnel:
+    get:
+      tags: [Map]
+      summary: Get personnel assigned to a room
+      description: Retrieves the specific personnel assigned to work within a specific room.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: List of personnel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonnelListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /map/entrances:
+    get:
+      tags: [Map]
+      summary: List entrances
+      description: Retrieves a list of all defined building or area entrances.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AreaIdFilter"
+      responses:
+        "200":
+          description: List of entrances
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntranceListResponse"
+
+  /map/stairs:
+    get:
+      tags: [Map]
+      summary: List stairs
+      description: Retrieves a list of all mapped stairwells.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AreaIdFilter"
+      responses:
+        "200":
+          description: List of stairs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StairListResponse"
+
+  /map/elevators:
+    get:
+      tags: [Map]
+      summary: List elevators
+      description: Retrieves a list of all mapped elevators.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AreaIdFilter"
+      responses:
+        "200":
+          description: List of elevators
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElevatorListResponse"
+
+  /map/outdoor-walkways:
+    get:
+      tags: [Map]
+      summary: List outdoor walkways
+      description: Retrieves a list of all mapped outdoor walkways.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/AreaIdFilter"
+      responses:
+        "200":
+          description: List of outdoor walkways
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutdoorWalkwayListResponse"
+
+  /map/personnel:
+    get:
+      tags: [Map]
+      summary: List personnel
+      description: Retrieves a list of all personnel registered within the spatial system.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of personnel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonnelListResponse"
+
+  # ------------------------------------------------------------------
+  # NAVIGATION
+  # ------------------------------------------------------------------
+  /navigation/routes:
+    post:
+      tags: [Navigation]
+      summary: Calculate a route
+      description: Calculates and returns an optimal route path (A*, Manhattan-distance heuristic) based on provided starting and ending nodes. Supports single or multi-destination queues.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [origin_node_id, destination_node_ids]
+              properties:
+                origin_node_id:
+                  type: integer
+                  format: int64
+                destination_node_ids:
+                  type: array
+                  items:
+                    type: integer
+                    format: int64
+                  minItems: 1
+                navigation_session_id:
+                  type: string
+                  format: uuid
+      responses:
+        "201":
+          description: Route generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteResponse"
+        "422":
+          description: No valid route could be generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /navigation/routes/{id}:
+    get:
+      tags: [Navigation]
+      summary: Get route
+      description: Retrieves the specific details and segment geometry of a previously generated route.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Route detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /navigation/nodes/{id}:
+    get:
+      tags: [Navigation]
+      summary: Get navigation node
+      description: Retrieves the spatial coordinates and metadata for a specific navigation node.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Node detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationNodeResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /navigation/destinations/{id}:
+    get:
+      tags: [Navigation]
+      summary: Get navigable destination
+      description: Retrieves details for a specific navigable location used in routing.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Destination detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationNodeResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ------------------------------------------------------------------
+  # SEARCH
+  # ------------------------------------------------------------------
+  /search:
+    get:
+      tags: [Search]
+      summary: Search destinations
+      description: Executes a query to find rooms, aliases, or personnel matching the user's input.
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: kiosk_session_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResultsResponse"
+
+  /search/suggestions:
+    get:
+      tags: [Search]
+      summary: Get search suggestions
+      description: Provides autocomplete or fuzzy-matched suggestions as the user types in the kiosk search bar.
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Suggestion list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: string
+
+  # ------------------------------------------------------------------
+  # NAVIGATION SESSIONS
+  # ------------------------------------------------------------------
+  /sessions/navigation:
+    post:
+      tags: [Navigation Sessions]
+      summary: Initialize navigation session
+      description: Initializes a new navigation session for a route or multi-destination queue.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kiosk_session_id:
+                  type: string
+                  format: uuid
+                destination_node_ids:
+                  type: array
+                  items:
+                    type: integer
+                    format: int64
+      responses:
+        "201":
+          description: Navigation session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+
+  /sessions/navigation/{id}:
+    get:
+      tags: [Navigation Sessions]
+      summary: Get navigation session
+      description: Retrieves the current status, instructions, and checklist of an active navigation session.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          description: Navigation session detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/navigation/{id}/pause:
+    post:
+      tags: [Navigation Sessions]
+      summary: Pause navigation session
+      description: Pauses an active navigation session.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          description: Navigation session paused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+
+  /sessions/navigation/{id}/resume:
+    post:
+      tags: [Navigation Sessions]
+      summary: Resume navigation session
+      description: Resumes a previously paused navigation session.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          description: Navigation session resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+
+  /sessions/navigation/{id}/complete:
+    post:
+      tags: [Navigation Sessions]
+      summary: Complete navigation session
+      description: Marks a navigation session as successfully concluded.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          description: Navigation session completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+
+  /sessions/navigation/{id}/cancel:
+    post:
+      tags: [Navigation Sessions]
+      summary: Cancel navigation session
+      description: Aborts a navigation session entirely.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          description: Navigation session cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+
+  /sessions/{id}/destinations/{destination_id}/reach:
+    post:
+      tags: [Navigation Sessions]
+      summary: Mark destination reached
+      description: Triggers a dynamic update confirming that a specific destination in the checklist has been reached via BLE proximity or manual user input.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+        - name: destination_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Destination marked as reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationDestinationResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ------------------------------------------------------------------
+  # QR SESSIONS
+  # ------------------------------------------------------------------
+  /sessions:
+    post:
+      tags: [QR Sessions]
+      summary: Create QR handoff session
+      description: Generates a new temporary session tied to a QR code for mobile handoff.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                navigation_session_id:
+                  type: string
+                  format: uuid
+      responses:
+        "201":
+          description: QR session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+
+  /sessions/{id}:
+    get:
+      tags: [QR Sessions]
+      summary: Get QR session
+      description: Retrieves the details of a specific QR handoff session.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          description: QR session detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/{id}/scan:
+    post:
+      tags: [QR Sessions]
+      summary: Register QR scan
+      description: Registers that a mobile device has scanned the QR code, officially initiating the handoff.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          description: QR session marked as scanned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+
+  /sessions/{id}/complete:
+    post:
+      tags: [QR Sessions]
+      summary: Complete QR handoff
+      description: Marks the QR handoff process as fully completed.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          description: QR session completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+
+  /sessions/{id}/cancel:
+    post:
+      tags: [QR Sessions]
+      summary: Cancel QR handoff
+      description: Cancels an unfulfilled QR session, typically due to idle timeout.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          description: QR session cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationSessionResponse"
+
+  # ------------------------------------------------------------------
+  # KIOSK SESSIONS
+  # ------------------------------------------------------------------
+  /sessions/kiosk:
+    post:
+      tags: [Kiosk Sessions]
+      summary: Initialize kiosk session
+      description: Initializes a new active interaction session when a user begins interacting with the kiosk.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kiosk_id:
+                  type: integer
+                  format: int64
+      responses:
+        "201":
+          description: Kiosk session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KioskSessionResponse"
+
+  /sessions/kiosk/{id}:
+    get:
+      tags: [Kiosk Sessions]
+      summary: Get kiosk session
+      description: Retrieves details about a specific active kiosk interaction session.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          description: Kiosk session detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KioskSessionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /sessions/kiosk/{id}/heartbeat:
+    post:
+      tags: [Kiosk Sessions]
+      summary: Kiosk session heartbeat
+      description: Receives periodic pings from the kiosk to keep the session alive and prevent idle timeouts.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessNoData"
+
+  /sessions/kiosk/{id}/end:
+    post:
+      tags: [Kiosk Sessions]
+      summary: End kiosk session
+      description: Terminates the session due to a timeout or user action, forcing the UI to return to the Attract Screen.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/UuidIdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                end_reason:
+                  $ref: "#/components/schemas/KioskSessionEndReason"
+      responses:
+        "200":
+          description: Kiosk session ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KioskSessionResponse"
+
+  # ------------------------------------------------------------------
+  # ANNOTATION
+  # ------------------------------------------------------------------
+  /annotations:
+    get:
+      tags: [Annotation]
+      summary: Get all annotations
+      description: Retrieves all current map annotations, logical objects, and routes for rendering in the admin 3D editor.
+      parameters:
+        - $ref: "#/components/parameters/AreaIdFilter"
+        - $ref: "#/components/parameters/FloorIdFilter"
+      responses:
+        "200":
+          description: Full annotation set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationBundleResponse"
+
+  /annotations/nodes/{id}:
+    post:
+      tags: [Annotation]
+      summary: Create annotation node
+      description: Creates a new annotation node (Room, Entrance, Kiosk, Sensor, or Auxiliary).
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NavigationNodeInput"
+      responses:
+        "201":
+          description: Node created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationNodeResponse"
+    get:
+      tags: [Annotation]
+      summary: Get annotation node
+      description: Retrieves data and contextual configuration for a specific annotation node.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Node detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationNodeResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Annotation]
+      summary: Delete annotation node
+      description: Deletes a node and cascades to safely remove all edges connected to it.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessNoData"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /annotations/edges:
+    post:
+      tags: [Annotation]
+      summary: Create edge
+      description: Creates a new pathfinding edge/connection between two existing auxiliary nodes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NavigationEdgeInput"
+      responses:
+        "201":
+          description: Edge created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationEdgeResponse"
+
+  /annotations/edges/{id}:
+    get:
+      tags: [Annotation]
+      summary: Get edge
+      description: Retrieves data regarding a specific edge.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Edge detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationEdgeResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Annotation]
+      summary: Update edge
+      description: Modifies an edge, such as changing its directionality (Bidirectional, Forward, or Reverse).
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                direction:
+                  $ref: "#/components/schemas/EdgeDirection"
+                active:
+                  type: boolean
+      responses:
+        "200":
+          description: Edge updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationEdgeResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Annotation]
+      summary: Delete edge
+      description: Deletes a specific pathfinding edge.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessNoData"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /annotations/transitions:
+    post:
+      tags: [Annotation]
+      summary: Create floor transition
+      description: Creates a new transition connection mapping between two separate floors (stairs, elevator, escalator, other).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FloorTransitionInput"
+      responses:
+        "201":
+          description: Floor transition created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FloorTransitionResponse"
+
+  /annotations/transitions/{id}:
+    patch:
+      tags: [Annotation]
+      summary: Update floor transition
+      description: Modifies an existing floor transition configuration.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FloorTransitionInput"
+      responses:
+        "200":
+          description: Floor transition updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FloorTransitionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Annotation]
+      summary: Delete floor transition
+      description: Deletes a floor transition configuration.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessNoData"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /annotations/rooms/{id}:
+    patch:
+      tags: [Annotation]
+      summary: Update room annotation metadata
+      description: Updates metadata for a room node, such as changing the Room Code, Alias, Description, or Image.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomInput"
+      responses:
+        "200":
+          description: Room updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /annotations/entrances/{id}:
+    patch:
+      tags: [Annotation]
+      summary: Update entrance linkage
+      description: Modifies linkage data defining which exact node an entrance connects to.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntranceInput"
+      responses:
+        "200":
+          description: Entrance updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntranceResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /annotations/stairs/{id}:
+    patch:
+      tags: [Annotation]
+      summary: Update stair configuration
+      description: Updates metadata and configuration specific to a stair node.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StairInput"
+      responses:
+        "200":
+          description: Stair updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StairResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /annotations/elevators/{id}:
+    patch:
+      tags: [Annotation]
+      summary: Update elevator configuration
+      description: Updates metadata and configuration specific to an elevator node.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ElevatorInput"
+      responses:
+        "200":
+          description: Elevator updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ElevatorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /annotations/outdoor-walkways/{id}:
+    patch:
+      tags: [Annotation]
+      summary: Update outdoor walkway configuration
+      description: Updates metadata and configuration specific to an outdoor walkway node.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OutdoorWalkwayInput"
+      responses:
+        "200":
+          description: Outdoor walkway updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutdoorWalkwayResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ------------------------------------------------------------------
+  # HARDWARE
+  # ------------------------------------------------------------------
+  /hardware/devices:
+    get:
+      tags: [Hardware]
+      summary: List devices
+      description: Retrieves a filtered list of all hardware devices in the registry.
+      parameters:
+        - name: device_type
+          in: query
+          schema:
+            $ref: "#/components/schemas/DeviceType"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/DeviceStatus"
+        - $ref: "#/components/parameters/AreaIdFilter"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceListResponse"
+
+  /hardware/devices/{id}:
+    get:
+      tags: [Hardware]
+      summary: Get device
+      description: Retrieves specific identity, assignment, and connection details for a device.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Device detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Hardware]
+      summary: Update device
+      description: Modifies device metadata such as Device Name, mapped Node, or Zone.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceUpdateInput"
+      responses:
+        "200":
+          description: Device updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Hardware]
+      summary: Decommission device
+      description: Soft-deletes or decommissions a piece of hardware from active operations.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessNoData"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hardware/devices/{id}/register:
+    post:
+      tags: [Hardware]
+      summary: Register device
+      description: Officially registers an internally discovered device to be managed by the system.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceRegisterInput"
+      responses:
+        "200":
+          description: Device registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hardware/kiosks:
+    get:
+      tags: [Hardware]
+      summary: List kiosks
+      description: Retrieves a list exclusively of all registered kiosk devices.
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of kiosks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KioskListResponse"
+
+  /hardware/kiosks/{id}:
+    get:
+      tags: [Hardware]
+      summary: Get kiosk
+      description: Retrieves hardware, software, and networking details for a specific kiosk.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Kiosk detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KioskResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hardware/sensors:
+    get:
+      tags: [Hardware]
+      summary: List sensors
+      description: Retrieves a list exclusively of all registered ESP32 sensor devices.
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of sensors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorListResponse"
+
+  /hardware/sensors/{id}:
+    get:
+      tags: [Hardware]
+      summary: Get sensor
+      description: Retrieves detailed status, firmware, and sampling interval details for an ESP32 sensor.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Sensor detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hardware/sensors/{id}/observations:
+    get:
+      tags: [Hardware]
+      summary: Get sensor observations
+      description: Retrieves raw signal counts and BLE observations received from a sensor via MQTT.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/StartDateParam"
+        - $ref: "#/components/parameters/EndDateParam"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of sensor observations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorObservationListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hardware/sensors/{id}/statistics:
+    get:
+      tags: [Hardware]
+      summary: Get sensor statistics
+      description: Retrieves aggregated transmission reliability and usage statistics for a specific sensor.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/StartDateParam"
+        - $ref: "#/components/parameters/EndDateParam"
+      responses:
+        "200":
+          description: Sensor statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorStatisticsListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hardware/devices/{id}/commands/ping:
+    post:
+      tags: [Hardware]
+      summary: Ping device
+      description: Sends a remote command to test the responsiveness/connection of a device.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "202":
+          $ref: "#/components/responses/CommandAccepted"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hardware/devices/{id}/commands/restart:
+    post:
+      tags: [Hardware]
+      summary: Restart device
+      description: Sends a remote command attempting to reboot the device.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "202":
+          $ref: "#/components/responses/CommandAccepted"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hardware/devices/{id}/commands/enable:
+    post:
+      tags: [Hardware]
+      summary: Enable device
+      description: Administratively enables a previously disabled device.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Device enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /hardware/devices/{id}/commands/disable:
+    post:
+      tags: [Hardware]
+      summary: Disable device
+      description: Administratively disables an active device.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Device disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ------------------------------------------------------------------
+  # ASSETS
+  # ------------------------------------------------------------------
+  /assets:
+    get:
+      tags: [Assets]
+      summary: List assets
+      description: Retrieves a summarized overview of all uploaded system assets.
+      parameters:
+        - $ref: "#/components/parameters/AreaIdFilter"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of assets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetListResponse"
+    post:
+      tags: [Assets]
+      summary: Upload new asset
+      description: Handles the secure file upload for a new asset.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, name]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                area_id:
+                  type: integer
+                  format: int64
+                description:
+                  type: string
+                source:
+                  type: string
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: Asset created and queued for processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetResponse"
+
+  /assets/{id}:
+    get:
+      tags: [Assets]
+      summary: Get asset
+      description: Retrieves the metadata, processing status, and validation status of a specific asset.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Asset detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Assets]
+      summary: Update asset metadata
+      description: Modifies asset metadata like Name, Description, Source, or Notes.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetUpdateInput"
+      responses:
+        "200":
+          description: Asset updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Assets]
+      summary: Delete asset
+      description: Deletes an asset from the system.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessNoData"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /assets/{id}/versions:
+    get:
+      tags: [Assets]
+      summary: List asset versions
+      description: Retrieves a chronological history of uploads/versions for a specific asset.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: List of asset versions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetVersionListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Assets]
+      summary: Upload new asset version
+      description: Uploads a new file to replace the current asset as a new version.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: New version created and queued for processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetVersionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /assets/{id}/versions/{version_id}:
+    get:
+      tags: [Assets]
+      summary: Get asset version
+      description: Retrieves detailed file information regarding a specific asset version.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/VersionIdPath"
+      responses:
+        "200":
+          description: Asset version detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetVersionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /assets/{id}/versions/{version_id}/download:
+    get:
+      tags: [Assets]
+      summary: Download asset version file
+      description: Dispatches the file download for a specific .glb asset version.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/VersionIdPath"
+      responses:
+        "200":
+          description: Binary .glb file stream
+          content:
+            model/gltf-binary:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /assets/{id}/validation:
+    get:
+      tags: [Assets]
+      summary: Get overall asset validation status
+      description: Retrieves the overall pass, warning, and error validation status for an asset.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Validation status summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationRunListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /assets/{id}/versions/{version_id}/validation:
+    get:
+      tags: [Assets]
+      summary: Get version validation history
+      description: Retrieves the historical validation results for a specific version.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/VersionIdPath"
+      responses:
+        "200":
+          description: Validation run history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationRunListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Assets]
+      summary: Trigger validation run
+      description: Manually triggers the backend to run validation checks against the asset version.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/VersionIdPath"
+      responses:
+        "202":
+          description: Validation run queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationRunResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /assets/{id}/versions/{version_id}/validation/checks:
+    get:
+      tags: [Assets]
+      summary: Get validation checks
+      description: Retrieves the specific structural, geometric, and compatibility checks performed during validation.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/VersionIdPath"
+        - name: category
+          in: query
+          schema:
+            $ref: "#/components/schemas/ValidationCategory"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ValidationStatus"
+      responses:
+        "200":
+          description: List of validation checks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationCheckListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /assets/{id}/processing:
+    get:
+      tags: [Assets]
+      summary: Get asset processing status
+      description: Checks if background tasks (like Draco compression or parsing) are complete.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Processing status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          processing_status:
+                            $ref: "#/components/schemas/ProcessingStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /assets/{id}/activate:
+    post:
+      tags: [Assets]
+      summary: Activate asset
+      description: Marks a validated asset as Active, integrating it into the live FlowSense system.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Asset activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Asset cannot be activated (unresolved validation errors)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /assets/{id}/versions/{version_id}/restore:
+    post:
+      tags: [Assets]
+      summary: Restore asset version
+      description: Makes a selected historical version the new active asset.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - $ref: "#/components/parameters/VersionIdPath"
+      responses:
+        "200":
+          description: Asset version restored and activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ------------------------------------------------------------------
+  # ANALYTICS
+  # ------------------------------------------------------------------
+  /analytics/dashboard:
+    get:
+      tags: [Analytics]
+      summary: Get dashboard summary
+      description: Retrieves summary metrics (kiosk sessions, failed searches, QR stats) for the main dashboard landing page.
+      parameters:
+        - $ref: "#/components/parameters/AnalyticsDateRangeParam"
+      responses:
+        "200":
+          description: Dashboard summary metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /analytics/navigation:
+    get:
+      tags: [Analytics]
+      summary: Get navigation analytics
+      description: Retrieves navigation analytics like top destinations, failed searches, and search trends.
+      parameters:
+        - $ref: "#/components/parameters/AnalyticsDateRangeParam"
+        - $ref: "#/components/parameters/AreaIdFilter"
+      responses:
+        "200":
+          description: Navigation analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /analytics/search:
+    get:
+      tags: [Analytics]
+      summary: Get search analytics
+      description: Retrieves specific data isolating search events and queries.
+      parameters:
+        - $ref: "#/components/parameters/AnalyticsDateRangeParam"
+      responses:
+        "200":
+          description: Search analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /analytics/kiosks:
+    get:
+      tags: [Analytics]
+      summary: Get kiosk usage analytics
+      description: Retrieves time-based usage metrics and hourly kiosk interaction frequency.
+      parameters:
+        - $ref: "#/components/parameters/AnalyticsDateRangeParam"
+        - name: kiosk_id
+          in: query
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Kiosk usage analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /analytics/sensors:
+    get:
+      tags: [Analytics]
+      summary: Get sensor analytics
+      description: Retrieves transmission reliability and aggregated BLE detection data from ESP32s.
+      parameters:
+        - $ref: "#/components/parameters/AnalyticsDateRangeParam"
+      responses:
+        "200":
+          description: Sensor analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /analytics/spatial:
+    get:
+      tags: [Analytics]
+      summary: Get spatial analytics
+      description: Retrieves spatial insights like busiest monitored locations and crowd density estimates.
+      parameters:
+        - $ref: "#/components/parameters/AnalyticsDateRangeParam"
+      responses:
+        "200":
+          description: Spatial analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /analytics/system:
+    get:
+      tags: [Analytics]
+      summary: Get system performance analytics
+      description: Retrieves system performance metrics such as API response latency and pathfinding execution times.
+      parameters:
+        - $ref: "#/components/parameters/AnalyticsDateRangeParam"
+      responses:
+        "200":
+          description: System performance analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /analytics/activity:
+    get:
+      tags: [Analytics]
+      summary: Get activity analytics
+      description: Retrieves daily operational metrics like queue usage or successful searches.
+      parameters:
+        - $ref: "#/components/parameters/AnalyticsDateRangeParam"
+      responses:
+        "200":
+          description: Activity analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /analytics/reports:
+    get:
+      tags: [Analytics]
+      summary: List reports
+      description: Retrieves a list of previously generated PDF or CSV analytics reports.
+      responses:
+        "200":
+          description: List of reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+    post:
+      tags: [Analytics]
+      summary: Generate report
+      description: Triggers Celery to generate or schedule a new data report based on selected analytics parameters.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [start_date, end_date, sections, format]
+              properties:
+                start_date:
+                  type: string
+                  format: date
+                end_date:
+                  type: string
+                  format: date
+                sections:
+                  type: array
+                  items:
+                    type: string
+                format:
+                  type: string
+                  enum: [pdf, csv]
+                schedule:
+                  type: object
+                  properties:
+                    frequency:
+                      type: string
+                      enum: [daily, weekly, monthly, semesterly]
+                    day:
+                      type: string
+                    time:
+                      type: string
+      responses:
+        "202":
+          description: Report generation queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /analytics/reports/{id}:
+    get:
+      tags: [Analytics]
+      summary: Download report
+      description: Downloads or retrieves a specific generated report file.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Report file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /analytics/qr:
+    get:
+      tags: [Analytics]
+      summary: Get QR handoff analytics
+      description: Retrieves overall metrics on QR generation rates, scan rates, and handoffs over time.
+      parameters:
+        - $ref: "#/components/parameters/AnalyticsDateRangeParam"
+      responses:
+        "200":
+          description: QR analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+  /analytics/qr/events:
+    get:
+      tags: [Analytics]
+      summary: Get QR event log
+      description: Retrieves logs of individual QR handoff occurrences.
+      parameters:
+        - $ref: "#/components/parameters/AnalyticsDateRangeParam"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of QR events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QrEventListResponse"
+
+  # ------------------------------------------------------------------
+  # ALERTS
+  # ------------------------------------------------------------------
+  /alerts:
+    get:
+      tags: [Alerts]
+      summary: List alerts
+      description: Retrieves current Informational, Warning, and Critical alerts requiring admin attention.
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            $ref: "#/components/schemas/AlertSeverity"
+        - name: cleared
+          in: query
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertListResponse"
+
+  /alerts/{id}:
+    get:
+      tags: [Alerts]
+      summary: Get alert
+      description: Retrieves details regarding a specific alert.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Alert detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /alerts/{id}/acknowledge:
+    post:
+      tags: [Alerts]
+      summary: Acknowledge alert
+      description: Logs that an administrator has seen an alert but it remains unresolved.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /alerts/{id}/clear:
+    post:
+      tags: [Alerts]
+      summary: Clear alert
+      description: Administratively clears/resolves an alert, removing it from the dashboard panel.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Alert cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ------------------------------------------------------------------
+  # ACTIVITY
+  # ------------------------------------------------------------------
+  /activity/:
+    get:
+      tags: [Activity]
+      summary: List audit events
+      description: Retrieves the system's audit trail detailing who changed what (assets, settings, annotations) and when.
+      parameters:
+        - name: event_type
+          in: query
+          schema:
+            $ref: "#/components/schemas/AuditEventType"
+        - name: admin_user_id
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - $ref: "#/components/parameters/StartDateParam"
+        - $ref: "#/components/parameters/EndDateParam"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of audit events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEventListResponse"
+
+  /activity/{id}:
+    get:
+      tags: [Activity]
+      summary: Get audit event
+      description: Retrieves granular details about a specific audit event.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Audit event detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEventResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ------------------------------------------------------------------
+  # USERS
+  # ------------------------------------------------------------------
+  /users:
+    get:
+      tags: [Users]
+      summary: List administrators
+      description: Retrieves a list of all registered administrators.
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+      responses:
+        "200":
+          description: List of administrators
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserListResponse"
+    post:
+      tags: [Users]
+      summary: Register administrator
+      description: Registers a new user with an Admin or Super Admin role. Restricted to Super Admins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserInput"
+      responses:
+        "201":
+          description: Administrator created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get administrator
+      description: Retrieves details for a specific administrator profile.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Administrator detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Users]
+      summary: Update administrator
+      description: Updates an administrator's profile, such as changing their role or disabling their login.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserInput"
+      responses:
+        "200":
+          description: Administrator updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Users]
+      summary: Delete administrator
+      description: Soft-deletes an administrator, revoking system access.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessNoData"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ------------------------------------------------------------------
+  # SETTINGS
+  # ------------------------------------------------------------------
+  /settings:
+    get:
+      tags: [Settings]
+      summary: List settings
+      description: Retrieves all global configuration settings.
+      responses:
+        "200":
+          description: List of settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingListResponse"
+
+  /settings/{key}:
+    get:
+      tags: [Settings]
+      summary: Get setting
+      description: Retrieves the value of a specific setting key.
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Setting detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Settings]
+      summary: Update setting
+      description: Updates a specific setting key.
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value:
+                  type: object
+      responses:
+        "200":
+          description: Setting updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /settings/semesters:
+    get:
+      tags: [Settings]
+      summary: List semesters
+      description: Retrieves the registry of configured academic semesters.
+      responses:
+        "200":
+          description: List of semesters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SemesterListResponse"
+    post:
+      tags: [Settings]
+      summary: Create semester
+      description: Creates a new semester block with specific start and end dates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SemesterInput"
+      responses:
+        "201":
+          description: Semester created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SemesterResponse"
+
+  /settings/semesters/{id}:
+    get:
+      tags: [Settings]
+      summary: Get semester
+      description: Retrieves configuration details for a specific academic semester.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Semester detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SemesterResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Settings]
+      summary: Update semester
+      description: Modifies an existing semester's date range.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SemesterInput"
+      responses:
+        "200":
+          description: Semester updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SemesterResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Settings]
+      summary: Delete semester
+      description: Deletes a semester configuration from the registry.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          $ref: "#/components/responses/SuccessNoData"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ------------------------------------------------------------------
+  # SYSTEM
+  # ------------------------------------------------------------------
+  /system/status:
+    get:
+      tags: [System]
+      summary: Get system status
+      description: Retrieves the overall system state (Operational, Degraded, Critical, or Maintenance) displayed on the admin dashboard.
+      security: []
+      responses:
+        "200":
+          description: System status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status:
+                            $ref: "#/components/schemas/SystemStatus"
+
+  /system/health:
+    get:
+      tags: [System]
+      summary: Get system health
+      description: Executes a health check to verify the operational status of sub-components like the Database, Redis, Celery, and Kiosks.
+      security: []
+      responses:
+        "200":
+          description: System health check results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+
+components:
+  securitySchemes:
+    AdminSessionCookie:
+      type: apiKey
+      in: cookie
+      name: flowsense_admin_session
+      description: >
+        Long-lived secure HTTP cookie established after passwordless
+        administrator authentication. Required for all Admin API endpoints.
+    KioskDeviceToken:
+      type: http
+      scheme: bearer
+      description: >
+        Short-lived kiosk access token obtained via device credential
+        exchange. Used to distinguish an authenticated Kiosk Client from
+        an ordinary browser on public endpoints.
+
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    VersionIdPath:
+      name: version_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    UuidIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AreaIdFilter:
+      name: area_id
+      in: query
+      schema:
+        type: integer
+        format: int64
+    FloorIdFilter:
+      name: floor_id
+      in: query
+      schema:
+        type: integer
+        format: int64
+    AreaTypeFilter:
+      name: area_type
+      in: query
+      schema:
+        $ref: "#/components/schemas/AreaType"
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    PageSizeParam:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        default: 25
+        minimum: 1
+        maximum: 100
+    StartDateParam:
+      name: start_date
+      in: query
+      schema:
+        type: string
+        format: date-time
+    EndDateParam:
+      name: end_date
+      in: query
+      schema:
+        type: string
+        format: date-time
+    AnalyticsDateRangeParam:
+      name: range
+      in: query
+      description: Preset lookup range. Use start_date/end_date for custom range, or semester_id for semester scope.
+      schema:
+        type: string
+        enum: [today, last_7_days, last_30_days, semester, custom]
+        default: last_7_days
+
+  responses:
+    SuccessNoData:
+      description: Operation completed successfully
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SuccessEnvelope"
+    NotFound:
+      description: The requested resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Unauthorized:
+      description: Missing or invalid authentication credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: Authenticated but not permitted to perform this action
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ErrorResponse:
+      description: Validation or business rule error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    CommandAccepted:
+      description: Remote device command accepted and dispatched asynchronously
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SuccessEnvelope"
+
+  schemas:
+    # ---------------- Envelope ----------------
+    SuccessEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          nullable: true
+        message:
+          type: string
+          nullable: true
+    ErrorEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: ROOM_NOT_FOUND
+            message:
+              type: string
+              example: Destination does not exist.
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_count:
+          type: integer
+        total_pages:
+          type: integer
+
+    # ---------------- Enums ----------------
+    AreaType:
+      type: string
+      enum: [campus, building, outdoor, connector]
+    RoomType:
+      type: string
+      enum: [room, office, laboratory, facility, service, restroom, hall, other]
+    NodeType:
+      type: string
+      enum: [room, auxiliary, kiosk, sensor, area_entrance]
+    EdgeDirection:
+      type: string
+      enum: [bidirectional, forward, reverse]
+    TransitionType:
+      type: string
+      enum: [stairs, elevator, escalator, other]
+    DeviceType:
+      type: string
+      enum: [kiosk, sensor]
+    DeviceStatus:
+      type: string
+      enum: [unregistered, registered, online, offline, disabled, decommissioned]
+    MqttStatus:
+      type: string
+      enum: [online, offline, unknown]
+    NavigationSessionStatus:
+      type: string
+      enum: [created, active, scanned, completed, expired, cancelled]
+    KioskSessionEndReason:
+      type: string
+      enum: [completed, idle_timeout, manual_exit, error, unknown]
+    NavigationRequestStatus:
+      type: string
+      enum: [requested, generated, failed, completed]
+    QrEventType:
+      type: string
+      enum: [generated, scanned, expired, invalid]
+    AlertSeverity:
+      type: string
+      enum: [informational, warning, critical]
+    AuditEventType:
+      type: string
+      enum: [asset, configuration, validation, administrative]
+    AuditAction:
+      type: string
+      enum: [create, update, delete, upload, replace, restore, validate, activate, deactivate]
+    AdminRole:
+      type: string
+      enum: [admin, super admin]
+    ProcessingStatus:
+      type: string
+      enum: [pending, processing, completed, failed]
+    ValidationResult:
+      type: string
+      enum: [passed, warning, failed]
+    ValidationStatus:
+      type: string
+      enum: [passed, warning, error]
+    ValidationCategory:
+      type: string
+      enum:
+        - file_and_format
+        - model_and_geometry
+        - hierarchy_and_floor_structure
+        - floors_and_spatial_configuration
+        - flowsense_compatibility
+    SystemStatus:
+      type: string
+      enum: [operational, degraded, critical, maintenance]
+
+    # ---------------- Geometry ----------------
+    GeoJSONGeometry:
+      type: object
+      description: GeoJSON geometry expressed in EPSG:3857, returned/accepted by the API as GeoJSON regardless of internal PostGIS storage.
+      properties:
+        type:
+          type: string
+          enum: [Point, LineString, Polygon, MultiPolygon, GeometryCollection]
+        coordinates:
+          type: array
+          items: {}
+
+    # ---------------- Campus: Area ----------------
+    Area:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        parent_area_id:
+          type: integer
+          format: int64
+          nullable: true
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        area_type:
+          $ref: "#/components/schemas/AreaType"
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AreaInput:
+      type: object
+      required: [code, name, area_type]
+      properties:
+        parent_area_id:
+          type: integer
+          format: int64
+          nullable: true
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        area_type:
+          $ref: "#/components/schemas/AreaType"
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+    AreaResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Area"
+    AreaListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Area"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    # ---------------- Campus: Floor ----------------
+    Floor:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        area_id:
+          type: integer
+          format: int64
+        glb_node_name:
+          type: string
+          nullable: true
+        floor_order:
+          type: integer
+        elevation:
+          type: number
+          format: double
+          nullable: true
+        navigable:
+          type: boolean
+        visible_in_kiosk:
+          type: boolean
+        active:
+          type: boolean
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    FloorResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Floor"
+    FloorListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Floor"
+
+    # ---------------- Campus: Room ----------------
+    Room:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        floor_id:
+          type: integer
+          format: int64
+        room_code:
+          type: string
+        room_alias:
+          type: string
+        description:
+          type: string
+          nullable: true
+        room_type:
+          $ref: "#/components/schemas/RoomType"
+        is_searchable:
+          type: boolean
+        is_navigable:
+          type: boolean
+        is_active:
+          type: boolean
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+        image_path:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    RoomInput:
+      type: object
+      properties:
+        room_code:
+          type: string
+        room_alias:
+          type: string
+        description:
+          type: string
+        room_type:
+          $ref: "#/components/schemas/RoomType"
+        is_searchable:
+          type: boolean
+        is_navigable:
+          type: boolean
+        is_active:
+          type: boolean
+        image_path:
+          type: string
+    RoomResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Room"
+    RoomListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Room"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    # ---------------- Campus: Personnel ----------------
+    Personnel:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        full_name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+    PersonnelListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Personnel"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    # ---------------- Campus: Entrance/Stairs/Elevator/Walkway ----------------
+    Entrance:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        area_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        entrance_type:
+          type: string
+          nullable: true
+        is_primary:
+          type: boolean
+        active:
+          type: boolean
+        linked_node_id:
+          type: integer
+          format: int64
+          nullable: true
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+    EntranceInput:
+      type: object
+      properties:
+        name:
+          type: string
+        entrance_type:
+          type: string
+        is_primary:
+          type: boolean
+        active:
+          type: boolean
+        linked_node_id:
+          type: integer
+          format: int64
+    EntranceResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Entrance"
+    EntranceListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Entrance"
+
+    Stair:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        area_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        active:
+          type: boolean
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+    StairInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        active:
+          type: boolean
+    StairResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Stair"
+    StairListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Stair"
+
+    Elevator:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        area_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        active:
+          type: boolean
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+    ElevatorInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        active:
+          type: boolean
+    ElevatorResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Elevator"
+    ElevatorListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Elevator"
+
+    OutdoorWalkway:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        area_id:
+          type: integer
+          format: int64
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        navigable:
+          type: boolean
+        active:
+          type: boolean
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+    OutdoorWalkwayInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        navigable:
+          type: boolean
+        active:
+          type: boolean
+    OutdoorWalkwayResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/OutdoorWalkway"
+    OutdoorWalkwayListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/OutdoorWalkway"
+
+    # ---------------- Navigation ----------------
+    NavigationNode:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        floor_id:
+          type: integer
+          format: int64
+        room_id:
+          type: integer
+          format: int64
+          nullable: true
+        name:
+          type: string
+        node_type:
+          $ref: "#/components/schemas/NodeType"
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+        active:
+          type: boolean
+        navigable:
+          type: boolean
+        metadata:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    NavigationNodeInput:
+      type: object
+      required: [floor_id, name, node_type, geometry]
+      properties:
+        floor_id:
+          type: integer
+          format: int64
+        room_id:
+          type: integer
+          format: int64
+          nullable: true
+        name:
+          type: string
+        node_type:
+          $ref: "#/components/schemas/NodeType"
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+        active:
+          type: boolean
+        navigable:
+          type: boolean
+        metadata:
+          type: object
+    NavigationNodeResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/NavigationNode"
+
+    NavigationEdge:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        from_node_id:
+          type: integer
+          format: int64
+        to_node_id:
+          type: integer
+          format: int64
+        direction:
+          $ref: "#/components/schemas/EdgeDirection"
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+        active:
+          type: boolean
+        metadata:
+          type: object
+    NavigationEdgeInput:
+      type: object
+      required: [from_node_id, to_node_id]
+      properties:
+        from_node_id:
+          type: integer
+          format: int64
+        to_node_id:
+          type: integer
+          format: int64
+        direction:
+          $ref: "#/components/schemas/EdgeDirection"
+        metadata:
+          type: object
+    NavigationEdgeResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/NavigationEdge"
+
+    FloorTransition:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        transition_type:
+          $ref: "#/components/schemas/TransitionType"
+        from_node_id:
+          type: integer
+          format: int64
+          nullable: true
+        to_node_id:
+          type: integer
+          format: int64
+          nullable: true
+        active:
+          type: boolean
+    FloorTransitionInput:
+      type: object
+      required: [transition_type]
+      properties:
+        transition_type:
+          $ref: "#/components/schemas/TransitionType"
+        from_node_id:
+          type: integer
+          format: int64
+        to_node_id:
+          type: integer
+          format: int64
+        active:
+          type: boolean
+    FloorTransitionResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/FloorTransition"
+
+    AnnotationBundleResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                nodes:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/NavigationNode"
+                edges:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/NavigationEdge"
+                transitions:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/FloorTransition"
+
+    RouteSegment:
+      type: object
+      properties:
+        from_node_id:
+          type: integer
+          format: int64
+        to_node_id:
+          type: integer
+          format: int64
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+        distance:
+          type: number
+          format: double
+    Route:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        origin_node_id:
+          type: integer
+          format: int64
+        destinations:
+          type: array
+          items:
+            type: object
+            properties:
+              destination_node_id:
+                type: integer
+                format: int64
+              destination_order:
+                type: integer
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteSegment"
+        total_distance:
+          type: number
+          format: double
+        route_generation_ms:
+          type: integer
+        status:
+          $ref: "#/components/schemas/NavigationRequestStatus"
+    RouteResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Route"
+
+    # ---------------- Sessions ----------------
+    NavigationSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kiosk_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: "#/components/schemas/NavigationSessionStatus"
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        scanned_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        route:
+          $ref: "#/components/schemas/Route"
+    NavigationSessionResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/NavigationSession"
+
+    NavigationDestination:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        navigation_request_id:
+          type: integer
+          format: int64
+        destination_node_id:
+          type: integer
+          format: int64
+        destination_order:
+          type: integer
+        reached_at:
+          type: string
+          format: date-time
+          nullable: true
+    NavigationDestinationResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/NavigationDestination"
+
+    KioskSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kiosk_id:
+          type: integer
+          format: int64
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+        end_reason:
+          $ref: "#/components/schemas/KioskSessionEndReason"
+    KioskSessionResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/KioskSession"
+
+    # ---------------- Search ----------------
+    SearchResult:
+      type: object
+      properties:
+        result_type:
+          type: string
+          enum: [room, personnel]
+        room:
+          $ref: "#/components/schemas/Room"
+        personnel:
+          $ref: "#/components/schemas/Personnel"
+    SearchResultsResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/SearchResult"
+
+    # ---------------- Hardware ----------------
+    Device:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        device_id:
+          type: string
+        device_type:
+          $ref: "#/components/schemas/DeviceType"
+        name:
+          type: string
+          nullable: true
+        serial_number:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/DeviceStatus"
+        enabled:
+          type: boolean
+        mac_address:
+          type: string
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+        last_ping_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_data_at:
+          type: string
+          format: date-time
+          nullable: true
+        uptime_seconds:
+          type: integer
+          format: int64
+          nullable: true
+        discovered_at:
+          type: string
+          format: date-time
+        registered_at:
+          type: string
+          format: date-time
+          nullable: true
+    DeviceUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        map_node_id:
+          type: integer
+          format: int64
+        area_id:
+          type: integer
+          format: int64
+        enabled:
+          type: boolean
+    DeviceRegisterInput:
+      type: object
+      required: [name, map_node_id]
+      properties:
+        name:
+          type: string
+        map_node_id:
+          type: integer
+          format: int64
+        enabled:
+          type: boolean
+        sampling_interval_seconds:
+          type: integer
+          description: Required only when registering a sensor device.
+    DeviceResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Device"
+    DeviceListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Device"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    Kiosk:
+      type: object
+      properties:
+        device_id:
+          type: integer
+          format: int64
+        area_id:
+          type: integer
+          format: int64
+          nullable: true
+        floor_id:
+          type: integer
+          format: int64
+          nullable: true
+        map_node_id:
+          type: integer
+          format: int64
+          nullable: true
+        display_resolution:
+          type: string
+          nullable: true
+        touchscreen_connected:
+          type: boolean
+          nullable: true
+        touchscreen_status:
+          type: string
+          nullable: true
+        orientation:
+          type: string
+          nullable: true
+        hardware_status:
+          type: string
+          nullable: true
+        flowsense_version:
+          type: string
+          nullable: true
+        frontend_version:
+          type: string
+          nullable: true
+        last_application_restart_at:
+          type: string
+          format: date-time
+          nullable: true
+        application_status:
+          type: string
+          nullable: true
+        os_version:
+          type: string
+          nullable: true
+        firmware_version:
+          type: string
+          nullable: true
+        firmware_updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        firmware_status:
+          type: string
+          nullable: true
+        device:
+          $ref: "#/components/schemas/Device"
+    KioskResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Kiosk"
+    KioskListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Kiosk"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    Sensor:
+      type: object
+      properties:
+        device_id:
+          type: integer
+          format: int64
+        area_id:
+          type: integer
+          format: int64
+          nullable: true
+        floor_id:
+          type: integer
+          format: int64
+          nullable: true
+        map_node_id:
+          type: integer
+          format: int64
+          nullable: true
+        sampling_interval_seconds:
+          type: integer
+          nullable: true
+        sensor_enabled:
+          type: boolean
+        battery_level:
+          type: number
+          format: float
+          nullable: true
+        signal_strength:
+          type: integer
+          nullable: true
+        mqtt_status:
+          $ref: "#/components/schemas/MqttStatus"
+        firmware_version:
+          type: string
+          nullable: true
+        firmware_status:
+          type: string
+          nullable: true
+        last_transmission_at:
+          type: string
+          format: date-time
+          nullable: true
+        device:
+          $ref: "#/components/schemas/Device"
+    SensorResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Sensor"
+    SensorListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Sensor"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    SensorObservation:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        sensor_id:
+          type: integer
+          format: int64
+        observed_at:
+          type: string
+          format: date-time
+        estimated_density:
+          type: number
+          format: double
+          nullable: true
+        signal_count:
+          type: integer
+          nullable: true
+        battery_level:
+          type: number
+          format: float
+          nullable: true
+        signal_strength:
+          type: number
+          format: double
+          nullable: true
+    SensorObservationListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/SensorObservation"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    SensorStatistics:
+      type: object
+      properties:
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        sensor_id:
+          type: integer
+          format: int64
+        average_density:
+          type: number
+          format: double
+          nullable: true
+        peak_density:
+          type: number
+          format: double
+          nullable: true
+        average_signal_count:
+          type: number
+          format: double
+          nullable: true
+        peak_signal_count:
+          type: integer
+          nullable: true
+    SensorStatisticsListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/SensorStatistics"
+
+    # ---------------- Assets ----------------
+    Asset:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        area_id:
+          type: integer
+          format: int64
+          nullable: true
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        asset_type:
+          type: string
+        active_version_id:
+          type: integer
+          format: int64
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AssetUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        source:
+          type: string
+        notes:
+          type: string
+    AssetResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Asset"
+    AssetListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Asset"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    AssetVersion:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        asset_id:
+          type: integer
+          format: int64
+        version:
+          type: integer
+        filename:
+          type: string
+        file_format:
+          type: string
+        file_size_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        checksum:
+          type: string
+          nullable: true
+        processing_status:
+          $ref: "#/components/schemas/ProcessingStatus"
+        object_count:
+          type: integer
+          nullable: true
+        mesh_count:
+          type: integer
+          nullable: true
+        material_count:
+          type: integer
+          nullable: true
+        texture_count:
+          type: integer
+          nullable: true
+        detected_floor_count:
+          type: integer
+          nullable: true
+        potential_floor_count:
+          type: integer
+          nullable: true
+        vertices_count:
+          type: integer
+          format: int64
+          nullable: true
+        triangles_count:
+          type: integer
+          format: int64
+          nullable: true
+        dimension_x:
+          type: number
+          format: double
+          nullable: true
+        dimension_y:
+          type: number
+          format: double
+          nullable: true
+        dimension_z:
+          type: number
+          format: double
+          nullable: true
+        coordinate_unit:
+          type: string
+          nullable: true
+        processing_engine:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+    AssetVersionResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/AssetVersion"
+    AssetVersionListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/AssetVersion"
+
+    ValidationRun:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        asset_version_id:
+          type: integer
+          format: int64
+        validated_by:
+          type: integer
+          format: int64
+          nullable: true
+        result:
+          $ref: "#/components/schemas/ValidationResult"
+        summary:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    ValidationRunResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/ValidationRun"
+    ValidationRunListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/ValidationRun"
+
+    ValidationCheck:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        validation_run_id:
+          type: integer
+          format: int64
+        category:
+          $ref: "#/components/schemas/ValidationCategory"
+        check_name:
+          type: string
+        status:
+          $ref: "#/components/schemas/ValidationStatus"
+        message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    ValidationCheckListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/ValidationCheck"
+
+    # ---------------- Analytics ----------------
+    QrEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        navigation_session_id:
+          type: string
+          format: uuid
+          nullable: true
+        event_type:
+          $ref: "#/components/schemas/QrEventType"
+        created_at:
+          type: string
+          format: date-time
+    QrEventListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/QrEvent"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    # ---------------- Alerts ----------------
+    Alert:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        severity:
+          $ref: "#/components/schemas/AlertSeverity"
+        alert_type:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        entity_type:
+          type: string
+          nullable: true
+        entity_id:
+          type: integer
+          format: int64
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        acknowledged_at:
+          type: string
+          format: date-time
+          nullable: true
+        cleared_at:
+          type: string
+          format: date-time
+          nullable: true
+        acknowledged_by:
+          type: integer
+          format: int64
+          nullable: true
+    AlertResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Alert"
+    AlertListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Alert"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    # ---------------- Activity ----------------
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        admin_user_id:
+          type: integer
+          format: int64
+          nullable: true
+        event_type:
+          $ref: "#/components/schemas/AuditEventType"
+        entity_type:
+          type: string
+          nullable: true
+        entity_id:
+          type: integer
+          format: int64
+          nullable: true
+        action:
+          $ref: "#/components/schemas/AuditAction"
+        description:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+    AuditEventResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/AuditEvent"
+    AuditEventListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/AuditEvent"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    # ---------------- Users ----------------
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        role:
+          $ref: "#/components/schemas/AdminRole"
+        is_active:
+          type: boolean
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    AdminUserInput:
+      type: object
+      required: [email, full_name, role]
+      properties:
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        role:
+          $ref: "#/components/schemas/AdminRole"
+        is_active:
+          type: boolean
+    AdminUserResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/AdminUser"
+    AdminUserListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdminUser"
+            meta:
+              $ref: "#/components/schemas/PaginationMeta"
+
+    AdminSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        admin_user_id:
+          type: integer
+          format: int64
+        is_active:
+          type: boolean
+        expires_at:
+          type: string
+          format: date-time
+        last_activity_at:
+          type: string
+          format: date-time
+
+    # ---------------- Settings ----------------
+    Setting:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: object
+        description:
+          type: string
+          nullable: true
+        updated_by:
+          type: integer
+          format: int64
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+    SettingResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Setting"
+    SettingListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Setting"
+
+    Semester:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        academic_year:
+          type: string
+        name:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        is_active:
+          type: boolean
+    SemesterInput:
+      type: object
+      required: [academic_year, name, start_date, end_date]
+      properties:
+        academic_year:
+          type: string
+        name:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        is_active:
+          type: boolean
+    SemesterResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Semester"
+    SemesterListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/Semester"
