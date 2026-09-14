@@ -1,0 +1,21 @@
+# CORE DJANGO & REST FRAMEWORK
+Django>=5.0
+djangorestframework>=3.14.0
+django-cors-headers>=4.3.0
+
+# DATABASE ADAPTER (PostgreSQL / PostGIS)
+psycopg2-binary>=2.9.9
+
+# ASYNCHRONOUS TASKS & BROKER (Celery & Redis)
+celery>=5.3.6
+redis>=5.0.1
+
+# IOT & MQTT COMMUNICATION
+paho-mqtt>=1.6.1
+
+# API DOCUMENTATION (OpenAPI / Swagger)
+drf-spectacular>=0.27.0
+
+# UTILITIES & MEDIA HANDLING
+Pillow>=10.2.0
+python-dotenv>=1.0.0

@@ -364,7 +364,7 @@ class Edge(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                check=~models.Q(from_node=models.F("to_node")),
+                condition=~models.Q(from_node=models.F("to_node")),
                 name="chk_edge_nodes_different",
             ),
         ]

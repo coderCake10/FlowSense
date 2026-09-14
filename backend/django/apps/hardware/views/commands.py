@@ -1,0 +1,6 @@
+'''
+DevicePingCommandView
+DeviceRestartCommandView
+DeviceEnableCommandView
+DeviceDisableCommandView
+'''

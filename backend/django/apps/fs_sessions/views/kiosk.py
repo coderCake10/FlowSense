@@ -1,0 +1,6 @@
+'''
+KioskSessionCreateView
+KioskSessionDetailView
+KioskSessionHeartbeatView
+KioskSessionEndView
+'''

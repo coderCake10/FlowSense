@@ -1,0 +1,6 @@
+'''
+SensorListView
+SensorDetailView
+SensorObservationsView
+SensorStatisticsView
+'''

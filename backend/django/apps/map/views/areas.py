@@ -29,7 +29,6 @@ from map.serializers import (
     FloorSerializer,
 )
 
-
 class AreaViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
