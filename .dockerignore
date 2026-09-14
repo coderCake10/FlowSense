@@ -1,0 +1,13 @@
+# Keep build contexts small and prevent host artifacts from shadowing container installs.
+**/node_modules
+**/dist
+**/dist-ssr
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/venv
+.git
+.env
+**/*.log
+backend/django/celerybeat-schedule*
+backend/mosquitto/data

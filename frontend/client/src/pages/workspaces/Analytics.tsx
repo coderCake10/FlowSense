@@ -1,55 +1,116 @@
-import { useEffect, useMemo, useState } from "react";
+/* Civic Signal: operational workspace pages use AUF navy, signal gold, breathable tables, dynamic context panels, and restrained motion. */
+import { useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  ArrowUpRight,
+  Box,
+  Building2,
   Check,
-  Clock3,
+  ChevronRight,
+  CircleHelp,
+  CloudUpload,
+  Cpu,
+  Eye,
+  FileCheck2,
   Filter,
-  RefreshCw,
+  Gauge,
+  Layers3,
+  MapPin,
+  MoreHorizontal,
+  Network,
+  Pencil,
+  Plus,
   Route,
   Search,
-  TrendingUp,
+  Settings2,
+  ShieldCheck,
+  Signal,
+  Trash2,
+  Upload,
+  Users,
+  Wifi,
+  Wrench,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MetricCard, PageHeader } from "@/components/FlowSenseShell";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 import {
-  DashboardSummary,
+  PageHeader,
+  StatusPill,
+  MetricCard,
+} from "@/components/FlowSenseShell";
+import {
+  Device,
+  DeviceStatus,
   apiClient,
   endpointMap,
   isApiConfigured,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Canvas } from "@react-three/fiber";
 
-const fallbackSummary: DashboardSummary = {
-  systemStatus: "Operational",
-  onlineKiosks: 4,
-  onlineSensors: 18,
-  kioskSessions: 1248,
-  navigationQueries: 2810,
-  successfulSearches: 2346,
-  failedSearches: 464,
-  averageSession: "04:18",
-  density: [
-    { area: "EYA Main Entrance", density: "High", value: 86 },
-    { area: "EYA 1F", density: "Moderate", value: 55 },
-    { area: "PS Student Lounge", density: "Low", value: 22 },
-  ],
-  topDestinations: [
-    { id: "dest-1", name: "Guidance Office", code: "GUID", building: "EYA", floor: "1F" },
-    { id: "dest-2", name: "Registrar Office", code: "REG", building: "EYA", floor: "1F" },
-    { id: "dest-3", name: "Lecture Hall 201", code: "LH-201", building: "EYA", floor: "2F" },
-    { id: "dest-4", name: "Student Lounge", code: "LOUNGE", building: "PS", floor: "1F" },
-    { id: "dest-5", name: "Main Entrance", code: "MAIN", building: "EYA", floor: "G" },
-  ],
-};
-
-const searchActivity = [45, 58, 52, 79, 65, 88, 72];
-const kioskUsage = [12, 18, 25, 36, 52, 68, 84, 96, 76, 54, 32, 18];
-const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const devices: Device[] = [
+  {
+    id: "dev-001",
+    name: "SensorNode-1",
+    type: "Sensor",
+    location: "EYA Building · 1F",
+    status: "Unregistered",
+    lastPing: "Awaiting registration",
+    mac: "84:CC:A8:41:2F:11",
+  },
+  {
+    id: "dev-002",
+    name: "Main Entrance Kiosk",
+    type: "Kiosk",
+    location: "EYA Building · Main Entrance",
+    status: "Online",
+    lastPing: "10:29 AM",
+    mac: "84:CC:A8:41:2F:12",
+  },
+  {
+    id: "dev-003",
+    name: "EYA Kiosk-1",
+    type: "Kiosk",
+    location: "EYA Building · 1F",
+    status: "Online",
+    lastPing: "10:29 AM",
+    mac: "84:CC:A8:41:2F:13",
+  },
+  {
+    id: "dev-004",
+    name: "Sensor-2",
+    type: "Sensor",
+    location: "EYA Building · 2F",
+    status: "Online",
+    lastPing: "10:29 AM",
+    mac: "84:CC:A8:41:2F:14",
+  },
+  {
+    id: "dev-005",
+    name: "Sensor-3",
+    type: "Sensor",
+    location: "EYA Building · 3F",
+    status: "Offline",
+    lastPing: "01:29 AM yesterday",
+    mac: "84:CC:A8:41:2F:15",
+  },
+  {
+    id: "dev-006",
+    name: "Sensor-4",
+    type: "Sensor",
+    location: "EYA Building · 1F",
+    status: "Disabled",
+    lastPing: "1 week ago",
+    mac: "84:CC:A8:41:2F:16",
+  },
+];
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -58,20 +119,27 @@ function SectionLabel({ children }: { children: string }) {
     </p>
   );
 }
-
-function MiniBar({ values, gold = false }: { values: number[]; gold?: boolean }) {
-  const max = Math.max(...values, 1);
-
+function MiniBar({
+  values,
+  gold = false,
+}: {
+  values: number[];
+  gold?: boolean;
+}) {
   return (
-    <div className="flex h-32 items-end gap-2">
-      {values.map((value, index) => (
-        <div key={`${value}-${index}`} className="flex h-full flex-1 items-end">
+    <div className="flex h-28 items-end gap-2">
+      {values.map((value, i) => (
+        <div
+          key={i}
+          className="flex-1 rounded-t-md bg-[#e8eef5]"
+          style={{ height: `${Math.max(value, 8)}%` }}
+        >
           <div
             className={cn(
-              "w-full rounded-t-md transition-all duration-500",
+              "h-full rounded-t-md",
               gold ? "bg-[#f4c542]" : "bg-[#345a87]"
             )}
-          style={{ height: `${Math.max((value / max) * 100, 8)}%` }}
+            style={{ opacity: 0.65 + (i / values.length) * 0.35 }}
           />
         </div>
       ))}
@@ -79,74 +147,8 @@ function MiniBar({ values, gold = false }: { values: number[]; gold?: boolean })
   );
 }
 
-function formatNumber(value: number) {
-  return new Intl.NumberFormat("en-US").format(value);
-}
-
 export function Analytics() {
   const [range, setRange] = useState("Last 7 days");
-  const [summary, setSummary] = useState<DashboardSummary>(fallbackSummary);
-  const [loading, setLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [destinationQuery, setDestinationQuery] = useState("");
-  const [failedSearchQuery, setFailedSearchQuery] = useState("");
-
-  const loadAnalytics = async () => {
-    if (!isApiConfigured()) return;
-
-    try {
-      setLoading(true);
-      const response = await apiClient.get<
-        DashboardSummary | { data: DashboardSummary }
-      >(endpointMap.analytics.dashboard);
-
-      const data = "data" in response ? response.data : response;
-      if (data) setSummary({ ...fallbackSummary, ...data });
-      setLastUpdated(new Date());
-    } catch (error) {
-      console.error("Failed to load analytics:", error);
-      toast.error("Analytics could not be refreshed. Showing the latest available data.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadAnalytics();
-  }, []);
-
-  const resolutionRate = useMemo(() => {
-    const total = summary.successfulSearches + summary.failedSearches;
-    return total > 0
-      ? ((summary.successfulSearches / total) * 100).toFixed(1)
-      : "0.0";
-  }, [summary.successfulSearches, summary.failedSearches]);
-
-  const filteredDestinations = useMemo(() => {
-    const query = destinationQuery.trim().toLowerCase();
-    if (!query) return summary.topDestinations;
-
-    return summary.topDestinations.filter(destination =>
-      [destination.name, destination.code, destination.building, destination.floor]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [destinationQuery, summary.topDestinations]);
-
-  const failedSearches = useMemo(
-    () =>
-      [
-        ["Student affairs office", 31],
-        ["Clinic second floor", 25],
-        ["Room EA-207", 19],
-        ["Library entrance", 13],
-      ].filter(([name]) =>
-        String(name).toLowerCase().includes(failedSearchQuery.trim().toLowerCase())
-      ),
-    [failedSearchQuery]
-  );
-
   return (
     <>
       <PageHeader
@@ -154,17 +156,13 @@ export function Analytics() {
         title="See movement, not just numbers"
         description="Use kiosk activity, search resolution, and monitored zone estimates to make the next campus decision with context."
         action={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="text-right text-[10px] text-[#8391a3]">
-              <p className="font-semibold text-[#53677d]">Data window</p>
-              <p>{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Using latest available data"}</p>
-            </div>
+          <div className="flex items-center gap-2">
             <select
               aria-label="Filter range"
               value={range}
-              onChange={event => {
-                setRange(event.target.value);
-                toast.success(`Analytics range: ${event.target.value}`);
+              onChange={e => {
+                setRange(e.target.value);
+                toast.success(`Analytics range: ${e.target.value}`);
               }}
               className="h-10 rounded-lg border border-[#dbe3ed] bg-white px-3 text-xs font-semibold text-[#17365d]"
             >
@@ -175,161 +173,158 @@ export function Analytics() {
             <Button
               variant="outline"
               className="border-[#dbe3ed] text-[#17365d]"
-              onClick={() => void loadAnalytics()}
-              disabled={loading}
+              onClick={() => toast.message(`Analytics filtered: ${range}`)}
             >
-              <RefreshCw size={15} className={cn("mr-2", loading && "animate-spin")} />
-              {loading ? "Refreshing" : "Refresh"}
+              <Filter size={15} className="mr-2" />
+              Filter range
             </Button>
           </div>
         }
       />
-
-      <SectionLabel>Analytics summary</SectionLabel>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Kiosk sessions"
-          value={formatNumber(summary.kioskSessions)}
-          detail={`For ${range.toLowerCase()}`}
+          value="1,248"
+          detail="This month"
           icon={Activity}
           accent="navy"
         />
         <MetricCard
           label="Navigation queries"
-          value={formatNumber(summary.navigationQueries)}
-          detail="Recorded navigation requests"
+          value="2,810"
+          detail="+18.4% month on month"
           icon={Route}
           accent="gold"
         />
         <MetricCard
           label="Successful searches"
-          value={formatNumber(summary.successfulSearches)}
-          detail={`${resolutionRate}% resolution rate`}
+          value="2,346"
+          detail="83.5% resolution rate"
           icon={Check}
           accent="green"
         />
         <MetricCard
           label="Failed searches"
-          value={formatNumber(summary.failedSearches)}
+          value="464"
           detail="Requires content review"
           icon={AlertTriangle}
           accent="red"
         />
       </div>
-
-      <div className="mt-6 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="mt-5 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className="border-[#dbe3ed]">
           <CardHeader className="flex-row items-start justify-between">
             <div>
-              <CardTitle className="font-display text-lg">Search activity</CardTitle>
-              <p className="text-xs text-[#8391a3]">Queries over the selected period</p>
+              <CardTitle className="font-display text-lg">
+                Search activity
+              </CardTitle>
+              <p className="text-xs text-[#8391a3]">
+                Queries over the last seven days
+              </p>
             </div>
             <Badge variant="outline" className="border-[#dbe3ed]">
-              {range}
+              Generated · 10:18 AM
             </Badge>
           </CardHeader>
           <CardContent>
-            <MiniBar values={searchActivity} />
+            <MiniBar values={[45, 58, 52, 79, 65, 88, 72]} />
             <div className="mt-3 flex justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9aa7b6]">
-              {days.map(day => <span key={day}>{day}</span>)}
+              <span>Mon</span>
+              <span>Tue</span>
+              <span>Wed</span>
+              <span>Thu</span>
+              <span>Fri</span>
+              <span>Sat</span>
+              <span>Sun</span>
             </div>
           </CardContent>
         </Card>
-
         <Card className="border-[#dbe3ed]">
           <CardHeader>
-            <CardTitle className="font-display text-lg">Top destinations</CardTitle>
-            <p className="text-xs text-[#8391a3]">Most searched destinations</p>
+            <CardTitle className="font-display text-lg">
+              Top destinations
+            </CardTitle>
+            <p className="text-xs text-[#8391a3]">Most searched this month</p>
           </CardHeader>
-          <CardContent>
-            <div className="relative mb-4">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9aa7b6]" />
-              <Input
-                value={destinationQuery}
-                onChange={event => setDestinationQuery(event.target.value)}
-                placeholder="Search destinations"
-                className="border-[#dbe3ed] pl-9 text-xs"
-              />
-            </div>
-            <div className="space-y-4">
-              {filteredDestinations.map((destination, index) => (
-                <div key={destination.id} className="flex items-center gap-3">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-[#edf2f7] text-xs font-bold text-[#17365d]">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-[#53677d]">{destination.name}</p>
-                    <p className="text-[10px] text-[#9aa7b6]">{destination.building} · {destination.floor}</p>
-                  </div>
-                  <span className="text-xs font-bold text-[#17365d]">{184 - index * 21}</span>
-                </div>
-              ))}
-              {filteredDestinations.length === 0 && (
-                <p className="py-6 text-center text-xs text-[#8391a3]">No destinations match your search.</p>
-              )}
-            </div>
+          <CardContent className="space-y-4">
+            {[
+              "Guidance Office",
+              "Registrar Office",
+              "Lecture Hall 201",
+              "Student Lounge",
+              "Main Entrance",
+            ].map((name, i) => (
+              <div key={name} className="flex items-center gap-3">
+                <span className="grid size-7 place-items-center rounded-lg bg-[#edf2f7] text-xs font-bold text-[#17365d]">
+                  0{i + 1}
+                </span>
+                <p className="flex-1 text-sm font-medium text-[#53677d]">
+                  {name}
+                </p>
+                <span className="text-xs font-bold text-[#17365d]">
+                  {184 - i * 21}
+                </span>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>
-
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <Card className="border-[#dbe3ed]">
           <CardHeader>
-            <CardTitle className="font-display text-lg">Failed searches</CardTitle>
-            <p className="text-xs text-[#8391a3]">Queries that need alias or map review</p>
+            <CardTitle className="font-display text-lg">
+              Failed searches
+            </CardTitle>
+            <p className="text-xs text-[#8391a3]">
+              Queries that need alias or map review
+            </p>
           </CardHeader>
-          <CardContent>
-            <div className="relative mb-4">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9aa7b6]" />
-              <Input
-                value={failedSearchQuery}
-                onChange={event => setFailedSearchQuery(event.target.value)}
-                placeholder="Find a failed query"
-                className="border-[#dbe3ed] pl-9 text-xs"
-              />
-            </div>
-            <div className="space-y-3">
-              {failedSearches.map(([name, count]) => (
-                <div key={String(name)} className="flex items-center gap-3 rounded-lg bg-[#fff8f7] p-3">
-                  <AlertTriangle size={15} className="text-[#c4524b]" />
-                  <span className="flex-1 text-xs font-medium text-[#53677d]">{name}</span>
-                  <span className="text-xs font-bold text-[#b13a36]">{count}</span>
-                </div>
-              ))}
-              {failedSearches.length === 0 && (
-                <p className="py-6 text-center text-xs text-[#8391a3]">No failed searches match your filter.</p>
-              )}
-            </div>
+          <CardContent className="space-y-3">
+            {[
+              "Student affairs office",
+              "Clinic second floor",
+              "Room EA-207",
+              "Library entrance",
+            ].map((name, i) => (
+              <div
+                key={name}
+                className="flex items-center gap-3 rounded-lg bg-[#fff8f7] p-3"
+              >
+                <AlertTriangle size={15} className="text-[#c4524b]" />
+                <span className="flex-1 text-xs font-medium text-[#53677d]">
+                  {name}
+                </span>
+                <span className="text-xs font-bold text-[#b13a36]">
+                  {31 - i * 6}
+                </span>
+              </div>
+            ))}
           </CardContent>
         </Card>
-
         <Card className="border-[#dbe3ed]">
           <CardHeader>
-            <CardTitle className="font-display text-lg">Crowd density by zone</CardTitle>
-            <p className="text-xs text-[#8391a3]">BLE estimates from active sensors</p>
+            <CardTitle className="font-display text-lg">
+              Crowd density by zone
+            </CardTitle>
+            <p className="text-xs text-[#8391a3]">
+              BLE estimates from active sensors
+            </p>
           </CardHeader>
-          <CardContent className="space-y-5">
-            {summary.density.map(point => (
-              <div key={point.area}>
+          <CardContent className="space-y-4">
+            {[
+              ["EYA Main Entrance", 86, "High"],
+              ["EYA 1F", 55, "Moderate"],
+              ["PS Student Lounge", 22, "Low"],
+            ].map(([name, value, label]) => (
+              <div key={name}>
                 <div className="mb-2 flex justify-between text-xs">
-                  <span className="font-semibold text-[#53677d]">{point.area}</span>
-                  <span className={cn(
-                    point.density === "High" && "font-semibold text-[#b13a36]",
-                    point.density === "Moderate" && "font-semibold text-[#a07100]",
-                    point.density === "Low" && "font-semibold text-[#168051]"
-                  )}>
-                    {point.density} · {point.value}%
-                  </span>
+                  <span className="font-semibold text-[#53677d]">{name}</span>
+                  <span className="text-[#8391a3]">{label}</span>
                 </div>
                 <div className="h-2 rounded-full bg-[#edf1f6]">
                   <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-500",
-                      point.density === "High" && "bg-[#c4524b]",
-                      point.density === "Moderate" && "bg-[#f4c542]",
-                      point.density === "Low" && "bg-[#168051]"
-                    )}
-                    style={{ width: `${Math.min(Math.max(point.value, 0), 100)}%` }}
+                    className="h-full rounded-full bg-[#17365d]"
+                    style={{ width: `${value}%` }}
                   />
                 </div>
               </div>
@@ -337,12 +332,15 @@ export function Analytics() {
           </CardContent>
         </Card>
       </div>
-
       <div className="mt-5 grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
         <Card className="border-[#dbe3ed]">
           <CardHeader>
-            <CardTitle className="font-display text-lg">Most common destination sequences</CardTitle>
-            <p className="text-xs text-[#8391a3]">Frequently combined searches</p>
+            <CardTitle className="font-display text-lg">
+              Most common destination sequences
+            </CardTitle>
+            <p className="text-xs text-[#8391a3]">
+              Frequently combined searches
+            </p>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -361,10 +359,12 @@ export function Analytics() {
                     ["Registrar → Lecture Hall 201", 92, "18%"],
                     ["Student Lounge → Library", 64, "12%"],
                     ["Clinic → Main Entrance", 41, "8%"],
-                  ].map(([sequence, count, percentage], index) => (
-                    <tr key={String(sequence)} className="transition-colors hover:bg-[#fafbfd]">
-                      <td className="p-3 font-bold text-[#17365d]">{index + 1}</td>
-                      <td className="p-3 font-medium text-[#53677d]">{sequence}</td>
+                  ].map(([sequence, count, percentage], i) => (
+                    <tr key={sequence}>
+                      <td className="p-3 font-bold text-[#17365d]">{i + 1}</td>
+                      <td className="p-3 font-medium text-[#53677d]">
+                        {sequence}
+                      </td>
                       <td className="p-3">{count}</td>
                       <td className="p-3">{percentage}</td>
                     </tr>
@@ -374,67 +374,106 @@ export function Analytics() {
             </div>
           </CardContent>
         </Card>
-
         <Card className="border-[#dbe3ed]">
           <CardHeader>
             <CardTitle className="font-display text-lg">Alert panel</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <AlertItem icon={TrendingUp} level="INFO" text="Navigation activity is being monitored" tone="green" />
-            <AlertItem icon={AlertTriangle} level="WARNING" text={`${summary.failedSearches.toLocaleString()} failed searches require review`} tone="gold" />
-            <AlertItem icon={Clock3} level="INFO" text={`Average session time is ${summary.averageSession}`} tone="navy" />
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <Card className="border-[#dbe3ed]">
-          <CardHeader>
-            <CardTitle className="font-display text-lg">Kiosk usage by hour</CardTitle>
-            <p className="text-xs text-[#8391a3]">Illustrative hourly distribution until kiosk analytics are connected.</p>
-          </CardHeader>
-          <CardContent>
-            <MiniBar values={kioskUsage} gold />
-            <div className="mt-3 flex justify-between text-[10px] uppercase tracking-[.12em] text-[#9aa7b6]">
-              <span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-[#dbe3ed]">
-          <CardHeader>
-            <CardTitle className="font-display text-lg">Kiosk availability</CardTitle>
-            <p className="text-xs text-[#8391a3]">Current availability snapshot</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
             {[
-              ["Main Entrance Kiosk", "99.8%"],
-              ["EYA Kiosk-1", "98.2%"],
-              ["PS Kiosk-1", "96.7%"],
-            ].map(([location, availability]) => (
-              <div key={location} className="flex items-center justify-between border-b border-[#edf1f5] pb-3 text-xs last:border-0 last:pb-0">
-                <span className="font-semibold text-[#53677d]">{location}</span>
-                <span className="font-bold text-[#168051]">{availability}</span>
+              ["INFO", "Increased kiosk usage 24%", "#168051"],
+              ["WARNING", "High failed search rate 8.2%", "#a07100"],
+              ["CRITICAL", "Kiosk unavailable 12 min", "#b13a36"],
+            ].map(([level, text, color]) => (
+              <div
+                key={level}
+                className="flex gap-3 rounded-xl border border-[#edf1f5] p-3"
+              >
+                <AlertTriangle size={17} style={{ color }} />
+                <div>
+                  <p className="text-[10px] font-bold" style={{ color }}>
+                    {level}
+                  </p>
+                  <p className="mt-1 text-xs text-[#53677d]">{text}</p>
+                  <p className="mt-1 text-[10px] text-[#9aa7b6]">11:24 AM</p>
+                </div>
               </div>
             ))}
           </CardContent>
         </Card>
       </div>
-
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <Card className="border-[#dbe3ed]">
+          <CardHeader>
+            <CardTitle className="font-display text-lg">
+              Kiosk usage by hour
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <MiniBar
+              values={[12, 18, 25, 36, 52, 68, 84, 96, 76, 54, 32, 18]}
+              gold
+            />
+            <div className="mt-3 flex justify-between text-[10px] uppercase tracking-[.12em] text-[#9aa7b6]">
+              <span>12 AM</span>
+              <span>6 AM</span>
+              <span>12 PM</span>
+              <span>6 PM</span>
+              <span>12 AM</span>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-[#dbe3ed]">
+          <CardHeader>
+            <CardTitle className="font-display text-lg">
+              Kiosk availability
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[
+                ["Main Entrance Kiosk", "99.8%"],
+                ["EYA Kiosk-1", "98.2%"],
+                ["PS Kiosk-1", "96.7%"],
+              ].map(([location, availability]) => (
+                <div
+                  key={location}
+                  className="flex items-center justify-between border-b border-[#edf1f5] pb-3 text-xs"
+                >
+                  <span className="font-semibold text-[#53677d]">
+                    {location}
+                  </span>
+                  <span className="font-bold text-[#168051]">
+                    {availability}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       <Card className="mt-5 border-[#dbe3ed]">
         <CardHeader>
-          <CardTitle className="font-display text-lg">Reports and exports</CardTitle>
-          <p className="text-xs text-[#8391a3]">Prepare a report using the selected analysis period.</p>
+          <CardTitle className="font-display text-lg">
+            Reports and exports
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-[1fr_1fr_180px]">
             <label className="text-xs font-semibold text-[#53677d]">
               Period start
-              <Input type="date" defaultValue="2026-08-08" className="mt-2 border-[#dbe3ed]" />
+              <Input
+                type="date"
+                defaultValue="2026-08-08"
+                className="mt-2 border-[#dbe3ed]"
+              />
             </label>
             <label className="text-xs font-semibold text-[#53677d]">
               Period end
-              <Input type="date" defaultValue="2026-08-10" className="mt-2 border-[#dbe3ed]" />
+              <Input
+                type="date"
+                defaultValue="2026-08-10"
+                className="mt-2 border-[#dbe3ed]"
+              />
             </label>
             <label className="text-xs font-semibold text-[#53677d]">
               Format
@@ -447,15 +486,17 @@ export function Analytics() {
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-4 text-xs text-[#53677d]">
-              {["Overview", "Navigation", "Kiosk", "Route", "System"].map(label => (
-                <label key={label} className="flex items-center gap-2">
-                  <input type="checkbox" defaultChecked /> {label}
-                </label>
-              ))}
+              {["Overview", "Navigation", "Kiosk", "Route", "System"].map(
+                label => (
+                  <label key={label} className="flex items-center gap-2">
+                    <input type="checkbox" defaultChecked /> {label}
+                  </label>
+                )
+              )}
             </div>
             <Button
               className="bg-[#17365d] text-white hover:bg-[#102c4d]"
-              onClick={() => toast.success("Report generation requested")}
+              onClick={() => toast.success("Report generated")}
             >
               Generate report
             </Button>
@@ -463,34 +504,5 @@ export function Analytics() {
         </CardContent>
       </Card>
     </>
-  );
-}
-
-function AlertItem({
-  icon: Icon,
-  level,
-  text,
-  tone,
-}: {
-  icon: typeof TrendingUp;
-  level: string;
-  text: string;
-  tone: "green" | "gold" | "navy";
-}) {
-  const toneClasses = {
-    green: "text-[#168051]",
-    gold: "text-[#a07100]",
-    navy: "text-[#17365d]",
-  };
-
-  return (
-    <div className="flex gap-3 rounded-xl border border-[#edf1f5] p-3">
-      <Icon size={17} className={toneClasses[tone]} />
-      <div>
-        <p className={cn("text-[10px] font-bold", toneClasses[tone])}>{level}</p>
-        <p className="mt-1 text-xs text-[#53677d]">{text}</p>
-        <p className="mt-1 text-[10px] text-[#9aa7b6]">Current analytics window</p>
-      </div>
-    </div>
   );
 }

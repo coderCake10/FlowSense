@@ -1,15 +1,116 @@
-/* Civic Signal: AUF navy shell, FlowSense Signal Gold for active operational states, Space Grotesk headings, IBM Plex Sans body, breathable workspace composition, restrained motion. */
-import { useEffect, useState } from "react";
-import { Box, CloudUpload, Plus, Upload, X } from "lucide-react";
+/* Civic Signal: operational workspace pages use AUF navy, signal gold, breathable tables, dynamic context panels, and restrained motion. */
+import { useMemo, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowUpRight,
+  Box,
+  Building2,
+  Check,
+  ChevronRight,
+  CircleHelp,
+  CloudUpload,
+  Cpu,
+  Eye,
+  FileCheck2,
+  Filter,
+  Gauge,
+  Layers3,
+  MapPin,
+  MoreHorizontal,
+  Network,
+  Pencil,
+  Plus,
+  Route,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Signal,
+  Trash2,
+  Upload,
+  Users,
+  Wifi,
+  Wrench,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PageHeader, StatusPill } from "@/components/FlowSenseShell";
-import { endpointMap, isApiConfigured } from "@/lib/api";
+import { Separator } from "@/components/ui/separator";
+import {
+  PageHeader,
+  StatusPill,
+  MetricCard,
+} from "@/components/FlowSenseShell";
+import {
+  Device,
+  DeviceStatus,
+  apiClient,
+  endpointMap,
+  isApiConfigured,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Canvas } from "@react-three/fiber";
+
+const devices: Device[] = [
+  {
+    id: "dev-001",
+    name: "SensorNode-1",
+    type: "Sensor",
+    location: "EYA Building · 1F",
+    status: "Unregistered",
+    lastPing: "Awaiting registration",
+    mac: "84:CC:A8:41:2F:11",
+  },
+  {
+    id: "dev-002",
+    name: "Main Entrance Kiosk",
+    type: "Kiosk",
+    location: "EYA Building · Main Entrance",
+    status: "Online",
+    lastPing: "10:29 AM",
+    mac: "84:CC:A8:41:2F:12",
+  },
+  {
+    id: "dev-003",
+    name: "EYA Kiosk-1",
+    type: "Kiosk",
+    location: "EYA Building · 1F",
+    status: "Online",
+    lastPing: "10:29 AM",
+    mac: "84:CC:A8:41:2F:13",
+  },
+  {
+    id: "dev-004",
+    name: "Sensor-2",
+    type: "Sensor",
+    location: "EYA Building · 2F",
+    status: "Online",
+    lastPing: "10:29 AM",
+    mac: "84:CC:A8:41:2F:14",
+  },
+  {
+    id: "dev-005",
+    name: "Sensor-3",
+    type: "Sensor",
+    location: "EYA Building · 3F",
+    status: "Offline",
+    lastPing: "01:29 AM yesterday",
+    mac: "84:CC:A8:41:2F:15",
+  },
+  {
+    id: "dev-006",
+    name: "Sensor-4",
+    type: "Sensor",
+    location: "EYA Building · 1F",
+    status: "Disabled",
+    lastPing: "1 week ago",
+    mac: "84:CC:A8:41:2F:16",
+  },
+];
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -18,10 +119,37 @@ function SectionLabel({ children }: { children: string }) {
     </p>
   );
 }
+function MiniBar({
+  values,
+  gold = false,
+}: {
+  values: number[];
+  gold?: boolean;
+}) {
+  return (
+    <div className="flex h-28 items-end gap-2">
+      {values.map((value, i) => (
+        <div
+          key={i}
+          className="flex-1 rounded-t-md bg-[#e8eef5]"
+          style={{ height: `${Math.max(value, 8)}%` }}
+        >
+          <div
+            className={cn(
+              "h-full rounded-t-md",
+              gold ? "bg-[#f4c542]" : "bg-[#345a87]"
+            )}
+            style={{ opacity: 0.65 + (i / values.length) * 0.35 }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AssetManagement() {
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [fileName, setFileName] = useState("");
   const [processing, setProcessing] = useState(false);
   const [assetTab, setAssetTab] = useState("overview");
   const [buildingTab, setBuildingTab] = useState("information");
@@ -30,26 +158,6 @@ export function AssetManagement() {
   const [transitionEditor, setTransitionEditor] = useState<string[] | null>(
     null
   );
-  useEffect(() => {
-    if (!uploadOpen && !floorEditor && !transitionEditor) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (uploadOpen) {
-        setSelectedFile(null);
-        setIsDraggingFile(false);
-        setProcessing(false);
-        setUploadOpen(false);
-      } else if (floorEditor) {
-        setFloorEditor(null);
-      } else if (transitionEditor) {
-        setTransitionEditor(null);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [uploadOpen, floorEditor, transitionEditor]);
   const [floors, setFloors] = useState<string[][]>([
     ["01", "GL_1", "GROUND FLOOR", "G", "0.00 m", "YES", "CONFIGURED"],
     ["02", "FLOOR_1", "FIRST FLOOR", "1", "3.80 m", "YES", "CONFIGURED"],
@@ -62,41 +170,6 @@ export function AssetManagement() {
     ["STAIR B", "FIRST FLOOR", "SECOND FLOOR", "NEEDS REVIEW"],
     ["STAIR C", "SECOND FLOOR", "THIRD FLOOR", "NEEDS REVIEW"],
   ]);
-  const resetUpload = () => {
-    setSelectedFile(null);
-    setIsDraggingFile(false);
-    setProcessing(false);
-    setUploadOpen(false);
-  };
-
-  const selectAssetFile = (file: File | undefined) => {
-    if (!file) return;
-
-    const isGlb = file.name.toLowerCase().endsWith(".glb");
-    const maxSize = 500 * 1024 * 1024;
-
-    if (!isGlb) {
-      toast.error("Unsupported file", {
-        description: "Please select a GLB (.glb) file.",
-      });
-      return;
-    }
-
-    if (file.size > maxSize) {
-      toast.error("File is too large", {
-        description: "Asset uploads are limited to 500 MB.",
-      });
-      return;
-    }
-
-    setSelectedFile(file);
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   const saveAssetChanges = () => {
     setAssetAction(
       `Building ${buildingTab} saved · PATCH ${endpointMap.assets.all}/asset-001`
@@ -880,136 +953,63 @@ export function AssetManagement() {
         </div>
       )}{" "}
       {uploadOpen && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-[#07182d99] p-5"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="asset-upload-title"
-          onMouseDown={event => {
-            if (event.target === event.currentTarget) resetUpload();
-          }}
-        >
-          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-[#dbe3ed] bg-white text-[#17365d] shadow-2xl">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#07182d99] p-5">
+          <div className="w-full max-w-xl border border-[#17365d] bg-white text-[#17365d] shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#dbe3ed] px-6 py-4">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[#b08412]">
-                  Asset management
-                </p>
-                <h2 id="asset-upload-title" className="mt-1 font-display text-xl font-bold">
-                  Upload a new asset
-                </h2>
-              </div>
+              <h2 className="font-display text-xl font-bold">
+                Upload a new asset
+              </h2>
               <button
-                type="button"
-                onClick={resetUpload}
-                aria-label="Close upload dialog"
-                className="grid size-9 place-items-center rounded-lg text-[#718398] transition hover:bg-[#f3f6f9] hover:text-[#17365d]"
+                onClick={() => setUploadOpen(false)}
+                aria-label="Close upload"
               >
                 <X size={20} />
               </button>
             </div>
-
             <div className="p-6">
-              <label
-                htmlFor="asset-file"
-                className={cn(
-                  "flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed p-6 text-center transition",
-                  isDraggingFile
-                    ? "border-[#f4c542] bg-[#fff9e5]"
-                    : "border-[#aebccc] bg-[#fbfcfe] hover:border-[#17365d] hover:bg-[#f7f9fc]"
-                )}
-                onDragOver={event => {
-                  event.preventDefault();
-                  setIsDraggingFile(true);
-                }}
-                onDragLeave={() => setIsDraggingFile(false)}
-                onDrop={event => {
-                  event.preventDefault();
-                  setIsDraggingFile(false);
-                  selectAssetFile(event.dataTransfer.files?.[0]);
-                }}
-              >
-                <div className="grid size-12 place-items-center rounded-xl bg-[#edf2f7]">
-                  <Upload size={24} className="text-[#17365d]" />
-                </div>
+              <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center border border-dashed border-[#718398] bg-[#fbfcfe] text-center">
+                <Upload size={28} className="text-[#17365d]" />
                 <p className="mt-3 text-sm font-bold">Drop a GLB file here</p>
                 <p className="mt-1 text-xs text-[#718398]">
                   or browse from your computer
                 </p>
-                <p className="mt-4 text-[10px] text-[#8391a3]">
-                  Maximum file size 500 MB · GLB only
+                <p className="mt-5 text-[10px] text-[#8391a3]">
+                  Maximum file size 500 MB · GLB
                 </p>
                 <input
-                  id="asset-file"
                   type="file"
-                  accept=".glb,model/gltf-binary"
-                  className="sr-only"
-                  onChange={event => selectAssetFile(event.target.files?.[0])}
+                  accept=".glb"
+                  className="hidden"
+                  onChange={e => setFileName(e.target.files?.[0]?.name || "")}
                 />
               </label>
-
-              {selectedFile && (
-                <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-[#d5e9dd] bg-[#effaf3] p-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-bold text-[#168051]">
-                      {selectedFile.name}
-                    </p>
-                    <p className="mt-1 text-[11px] text-[#4f7d63]">
-                      GLB · {formatFileSize(selectedFile.size)} · Ready for processing
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedFile(null)}
-                    className="shrink-0 text-xs font-semibold text-[#168051] underline underline-offset-2"
-                  >
-                    Remove
-                  </button>
-                </div>
+              {fileName && (
+                <p className="mt-4 rounded bg-[#effaf3] p-3 text-xs font-semibold text-[#168051]">
+                  Selected file: {fileName}
+                </p>
               )}
-
               {processing && (
-                <div className="mt-4 rounded-xl border border-[#eadba2] bg-[#fff8df] p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold text-[#946c00]">
-                      Processing asset and running validation…
-                    </p>
-                    <span className="text-[10px] font-bold text-[#946c00]">
-                      PROCESSING
-                    </span>
-                  </div>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#eadfb7]">
-                    <div className="h-full w-2/3 animate-pulse rounded-full bg-[#f4c542]" />
-                  </div>
+                <div className="mt-4 rounded bg-[#fff8df] p-3 text-xs font-semibold text-[#946c00]">
+                  Processing asset and running validation…
                 </div>
               )}
-
               <div className="mt-7 flex justify-end gap-2">
-                <Button variant="outline" onClick={resetUpload} disabled={processing}>
+                <Button variant="outline" onClick={() => setUploadOpen(false)}>
                   Cancel
                 </Button>
                 <Button
-                  disabled={!selectedFile || processing}
-                  className="bg-[#17365d] text-white hover:bg-[#102c4d] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="bg-[#17365d] text-white hover:bg-[#102c4d]"
                   onClick={() => {
-                    if (!selectedFile) return;
-
                     setProcessing(true);
                     setAssetAction(
-                      `Validation requested for ${selectedFile.name} · POST ${endpointMap.assets.validation("asset-001")}`
+                      `Validation requested · POST ${endpointMap.assets.validation("asset-001")}`
                     );
                     toast.success(
                       isApiConfigured()
                         ? "Asset validation requested from API"
-                        : "Asset validation queued in frontend adapter",
-                      {
-                        description: selectedFile.name,
-                      }
+                        : "Asset validation queued in frontend adapter"
                     );
-                    window.setTimeout(() => {
-                      setProcessing(false);
-                      resetUpload();
-                    }, 900);
+                    window.setTimeout(() => setProcessing(false), 900);
                   }}
                 >
                   Begin processing

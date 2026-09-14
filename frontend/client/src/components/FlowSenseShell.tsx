@@ -1,839 +1,407 @@
-/* FlowSense dashboard: operational overview with live API data and safe fallback fixtures. */
-import { useEffect, useState } from "react";
+/* Civic Signal: compact AUF navy shell, FlowSense Signal Gold for active states, Space Grotesk headings, IBM Plex Sans body, breathable workspace composition. */
+import { ReactNode, useEffect } from "react";
+import { Link, useLocation } from "wouter";
 import {
   Activity,
-  AlertTriangle,
-  ArrowUpRight,
-  Check,
-  ChevronRight,
-  Clock3,
-  Gauge,
-  Plus,
-  Route,
-  SearchX,
-  ServerCog,
-  Signal,
+  BarChart3,
+  Boxes,
+  Building2,
+  ChevronDown,
+  CircleHelp,
+  Cpu,
+  LayoutDashboard,
+  Map,
+  Menu,
+  Settings2,
+  ShieldCheck,
+  Users,
+  Wifi,
+  X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import {
-  DashboardSummary,
+  AdminProfile,
   apiClient,
   endpointMap,
   isApiConfigured,
 } from "@/lib/api";
-import {
-  MetricCard,
-  PageHeader,
-  StatusPill,
-} from "@/components/FlowSenseShell";
-import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-type DashboardEnvelope = {
-  success?: boolean;
-  data?: DashboardSummary | null;
-  message?: string | null;
-};
-
-type ActivityEvent = {
-  id: string | number;
-  title: string;
-  description?: string | null;
-  createdAt: string;
-  tone?: "warning" | "info" | "success";
-};
-
-const fallbackSummary: DashboardSummary = {
-  systemStatus: "Operational",
-  onlineKiosks: 4,
-  totalKiosks: 4,
-  onlineSensors: 18,
-  totalSensors: 21,
-  kioskSessions: 184,
-  navigationQueries: 327,
-  successfulSearches: 269,
-  failedSearches: 58,
-  averageSession: "04:18",
-  density: [
-    { area: "EYA Main Entrance", value: 72, density: "High" },
-    { area: "EYA 1st Floor", value: 48, density: "Moderate" },
-    { area: "PS Student Lounge", value: 21, density: "Low" },
-  ],
-  topDestinations: [],
-};
-
-const fallbackActivity: ActivityEvent[] = [
-  {
-    id: "fallback-1",
-    title: "Sensor-3 has been offline",
-    description: "Since 01:29 AM · Hardware Management",
-    createdAt: "01:29 AM",
-    tone: "warning",
-  },
-  {
-    id: "fallback-2",
-    title: "New map version published",
-    description: "EYA Building v1.4 · Map Annotation",
-    createdAt: "10:18 AM",
-    tone: "info",
-  },
-  {
-    id: "fallback-3",
-    title: "Navigation service operating normally",
-    description: "Route requests are being processed normally.",
-    createdAt: "10:12 AM",
-    tone: "success",
-  },
+const navItems = [
+  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Map Annotation", href: "/map-annotation", icon: Map },
+  { label: "Asset Management", href: "/assets", icon: Boxes },
+  { label: "Hardware Management", href: "/hardware", icon: Cpu },
+  { label: "User Management", href: "/users", icon: Users },
+  { label: "Analytics", href: "/analytics", icon: BarChart3 },
 ];
 
-const fallbackActivityValues = [42, 65, 51, 76, 88, 64, 96];
-const fallbackActivityLabels = ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon"];
-
-function SectionLabel({ children }: { children: string }) {
+export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
-    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#8493a5]">
-      {children}
-    </p>
-  );
-}
-
-function MiniBar({ values }: { values: number[] }) {
-  const safeValues = values.length ? values : [0];
-  const max = Math.max(...safeValues, 1);
-
-  return (
-    <div className="flex h-28 items-end gap-2">
-      {safeValues.map((value, index) => (
-        <div
-          key={`${value}-${index}`}
-          className="flex h-full flex-1 items-end rounded-t-md bg-[#edf1f6]"
-        >
-          <div
-            className="w-full rounded-t-md bg-[#f4c542] transition-[height] duration-500"
-            style={{ height: `${Math.max((value / max) * 100, 8)}%` }}
-          />
+    <div className={cn("flex items-center gap-3", compact && "gap-2")}>
+      <div
+        aria-label="FlowSense Great Dane wayfinding mark"
+        className="relative grid size-10 place-items-center overflow-hidden rounded-xl bg-[#f4c542] shadow-[0_8px_18px_rgba(244,197,66,0.22)] ring-1 ring-[#f4c542]/30"
+      >
+        <div className="relative h-5 w-6 -rotate-12 rounded-[55%_45%_45%_55%] border-[3px] border-[#0b1f3a]">
+          <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full border-2 border-[#0b1f3a] bg-[#f4c542]" />
+          <span className="absolute -bottom-1 right-0 h-1.5 w-4 rotate-[-12deg] rounded-full bg-[#0b1f3a]" />
         </div>
-      ))}
-    </div>
-  );
-}
-
-function CurrentDateTime() {
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-[#dbe3ed] bg-white px-3 py-2 shadow-sm">
-      <Clock3 size={16} className="text-[#b08412]" />
-      <div className="text-right">
-        <p className="text-xs font-semibold text-[#17365d]">
-          {now.toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-            year: "numeric",
-          })}
-        </p>
-        <p className="mt-0.5 text-[11px] text-[#8391a3]">
-          {now.toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            second: "2-digit",
-          })}
-        </p>
       </div>
-    </div>
-  );
-}
-
-function densityTone(density: string) {
-  if (density === "High") {
-    return {
-      text: "text-[#b13a36]",
-      bar: "bg-[#d9655f]",
-    };
-  }
-
-  if (density === "Moderate") {
-    return {
-      text: "text-[#a07100]",
-      bar: "bg-[#e1b839]",
-    };
-  }
-
-  return {
-    text: "text-[#168051]",
-    bar: "bg-[#41ad7d]",
-  };
-}
-
-function systemStatusTone(status: DashboardSummary["systemStatus"]): "green" | "amber" | "red" | "navy" {
-  if (status === "Operational") return "green";
-  if (status === "Degraded") return "amber";
-  if (status === "Critical") return "red";
-  return "navy";
-}
-
-function activityIcon(tone: ActivityEvent["tone"]) {
-  if (tone === "warning") return AlertTriangle;
-  if (tone === "success") return Check;
-  return Activity;
-}
-
-function formatActivityDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-type KioskActivityPoint = {
-  label: string;
-  value: number;
-};
-
-function normalizeKioskActivity(payload: unknown): KioskActivityPoint[] {
-  const data =
-    typeof payload === "object" && payload !== null && "data" in payload
-      ? (payload as { data?: unknown }).data
-      : payload;
-
-  const rows =
-    Array.isArray(data)
-      ? data
-      : typeof data === "object" && data !== null
-        ? ((data as { daily?: unknown; results?: unknown }).daily ??
-            (data as { results?: unknown }).results)
-        : undefined;
-
-  if (!Array.isArray(rows)) return [];
-
-  return rows
-    .map((item, index) => {
-      const row = (item ?? {}) as Record<string, unknown>;
-      const rawValue =
-        row.sessions ?? row.count ?? row.value ?? row.total ?? 0;
-      const value = Number(rawValue);
-      const rawLabel = row.date ?? row.day ?? row.label ?? `Day ${index + 1}`;
-
-      if (!Number.isFinite(value)) return null;
-
-      const date = new Date(String(rawLabel));
-      const label = Number.isNaN(date.getTime())
-        ? String(rawLabel)
-        : date.toLocaleDateString("en-US", { weekday: "short" });
-
-      return { label, value };
-    })
-    .filter((point): point is KioskActivityPoint => point !== null)
-    .slice(-7);
-}
-
-function normalizeActivity(payload: unknown): ActivityEvent[] {
-  const data =
-    typeof payload === "object" && payload !== null && "data" in payload
-      ? (payload as { data?: unknown }).data
-      : payload;
-
-  if (!Array.isArray(data)) return [];
-
-  return data.slice(0, 6).map((item, index) => {
-    const event = (item ?? {}) as Record<string, unknown>;
-    const description =
-      typeof event.description === "string" ? event.description : null;
-    const createdAt =
-      typeof event.created_at === "string"
-        ? event.created_at
-        : typeof event.createdAt === "string"
-          ? event.createdAt
-          : "Recent";
-
-    return {
-      id:
-        typeof event.id === "string" || typeof event.id === "number"
-          ? event.id
-          : `activity-${index}`,
-      title:
-        typeof event.description === "string"
-          ? event.description
-          : typeof event.action === "string"
-            ? event.action
-            : "System activity recorded",
-      description:
-        description && description !== event.description
-          ? description
-          : typeof event.entity_type === "string"
-            ? event.entity_type
-            : null,
-      createdAt,
-      tone: "info",
-    };
-  });
-}
-
-export function Dashboard() {
-  const [summary, setSummary] = useState<DashboardSummary>(fallbackSummary);
-  const [activity, setActivity] = useState<ActivityEvent[]>(fallbackActivity);
-  const [kioskActivity, setKioskActivity] = useState<KioskActivityPoint[]>(
-    fallbackActivityLabels.map((label, index) => ({
-      label,
-      value: fallbackActivityValues[index],
-    }))
-  );
-  const [loading, setLoading] = useState(true);
-  const [apiError, setApiError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadDashboard() {
-      if (!isApiConfigured()) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setApiError(false);
-
-        const [dashboardResult, activityResult, kioskActivityResult] =
-          await Promise.allSettled([
-            apiClient.get<DashboardEnvelope>(endpointMap.analytics.dashboard),
-            apiClient.get<unknown>(endpointMap.activity.all),
-            apiClient.get<unknown>(endpointMap.analytics.kiosks),
-          ]);
-
-        if (cancelled) return;
-
-        if (dashboardResult.status === "fulfilled" && dashboardResult.value.data) {
-          setSummary(current => ({
-            ...current,
-            ...dashboardResult.value.data,
-            density:
-              dashboardResult.value.data.density?.length
-                ? dashboardResult.value.data.density
-                : current.density,
-          }));
-        }
-
-        if (activityResult.status === "fulfilled") {
-          const liveActivity = normalizeActivity(activityResult.value);
-          if (liveActivity.length) setActivity(liveActivity);
-        }
-
-        if (kioskActivityResult.status === "fulfilled") {
-          const liveKioskActivity = normalizeKioskActivity(
-            kioskActivityResult.value
-          );
-          if (liveKioskActivity.length) setKioskActivity(liveKioskActivity);
-        }
-
-        if (
-          dashboardResult.status === "rejected" ||
-          activityResult.status === "rejected" ||
-          kioskActivityResult.status === "rejected"
-        ) {
-          setApiError(true);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Failed to load dashboard data:", error);
-          setApiError(true);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    loadDashboard();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const activityValues = kioskActivity.map(point => point.value);
-  const activityLabels = kioskActivity.map(point => point.label);
-
-  const kioskTotal = summary.totalKiosks ?? null;
-  const sensorTotal = summary.totalSensors ?? null;
-
-  return (
-    <>
-      <PageHeader
-        eyebrow="Admin dashboard"
-        title="A clear view of campus operations"
-        description="Monitor the systems that make AUF wayfinding dependable, from live hardware health to the destinations visitors need most."
-        action={
-          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-            <CurrentDateTime />
-            <Button
-              className="bg-[#17365d] text-white hover:bg-[#102c4d]"
-              onClick={() => window.location.assign("/map-annotation")}
-            >
-              <Plus size={16} className="mr-2" />
-              New map update
-            </Button>
-          </div>
-        }
-      />
-
-      {apiError && (
-        <div className="mb-5 flex items-center gap-2 rounded-xl border border-[#f0d6d4] bg-[#fff8f7] px-4 py-3 text-xs text-[#8d3935]">
-          <AlertTriangle size={15} />
-          Live dashboard data is temporarily unavailable. Showing the latest
-          available dashboard values.
+      {!compact && (
+        <div>
+          <p className="font-display text-base font-bold tracking-[-0.03em] text-white">
+            FlowSense
+          </p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-white/55">
+            AUF wayfinding
+          </p>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* System Health */}
-      <section aria-labelledby="system-health-heading">
-        <SectionLabel>System Health</SectionLabel>
-        <Card className="overflow-hidden border-0 bg-[#0b1f3a] text-white shadow-[0_18px_45px_rgba(11,31,58,0.16)]">
-          <CardContent className="relative p-6 sm:p-8">
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 opacity-30"
-              style={{
-                backgroundImage:
-                  "linear-gradient(120deg, rgba(244,197,66,.18) 1px, transparent 1px), linear-gradient(30deg, rgba(255,255,255,.07) 1px, transparent 1px)",
-                backgroundSize: "38px 38px",
-              }}
-            />
+export function StatusPill({
+  status,
+  tone,
+}: {
+  status: string;
+  tone?: "green" | "amber" | "red" | "navy" | "gold";
+}) {
+  const tones = {
+    amber: "bg-amber-50 text-amber-700 ring-amber-200",
+    green: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    red: "bg-rose-50 text-rose-700 ring-rose-200",
+    navy: "bg-[#e9eef5] text-[#17365d] ring-[#c8d5e5]",
+    gold: "bg-[#fff5c8] text-[#8a6500] ring-[#f0d36d]",
+  };
+  const inferred =
+    status.toLowerCase().includes("online") ||
+    status.toLowerCase().includes("active") ||
+    status.toLowerCase().includes("passed")
+      ? "green"
+      : status.toLowerCase().includes("offline") ||
+          status.toLowerCase().includes("warning") ||
+          status.toLowerCase().includes("degraded")
+        ? "amber"
+        : status.toLowerCase().includes("critical") ||
+            status.toLowerCase().includes("error")
+          ? "red"
+          : "navy";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset",
+        tones[tone ?? inferred]
+      )}
+    >
+      <span className="size-1.5 rounded-full bg-current" />
+      {status}
+    </span>
+  );
+}
 
-            <div className="relative flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
-              <div className="max-w-2xl">
-                <div className="mb-5 flex flex-wrap items-center gap-2">
-                  <Badge className="border-[#f4c542]/30 bg-[#f4c542]/12 text-[#f8d96a]">
-                    SYSTEM HEALTH
-                  </Badge>
-                  <StatusPill
-                    status={summary.systemStatus}
-                    tone={systemStatusTone(summary.systemStatus)}
-                  />
-                </div>
+export function PageHeader({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mb-7 flex flex-col justify-between gap-4 border-b border-[#dbe3ed] pb-6 sm:flex-row sm:items-end">
+      <div className="border-l-2 border-[#f4c542] pl-4">
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#b08412]">
+          {eyebrow}
+        </p>
+        <h1 className="font-display text-3xl font-bold tracking-[-0.045em] text-[#102c4d]">
+          {title}
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#66768a]">
+          {description}
+        </p>
+      </div>
+      {action}
+    </div>
+  );
+}
 
-                <h2
-                  id="system-health-heading"
-                  className="max-w-lg font-display text-3xl font-bold leading-tight tracking-[-0.05em] sm:text-4xl"
-                >
-                  Every route starts with a reliable signal.
-                </h2>
-                <p className="mt-4 max-w-xl text-sm leading-6 text-white/65">
-                  Your campus map, devices, and navigation services are being
-                  monitored in one operational view.
-                </p>
-              </div>
-
-              <div className="grid shrink-0 gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-white/10 bg-white/8 px-4 py-3">
-                  <p className="text-[10px] uppercase tracking-[0.15em] text-white/45">
-                    Kiosks online
-                  </p>
-                  <p className="mt-1 font-display text-2xl font-bold">
-                    {loading ? "—" : summary.onlineKiosks}
-                    {kioskTotal !== null && (
-                      <span className="text-sm font-normal text-white/45">
-                        {` / ${kioskTotal}`}
-                      </span>
-                    )}
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-white/8 px-4 py-3">
-                  <p className="text-[10px] uppercase tracking-[0.15em] text-white/45">
-                    Sensors online
-                  </p>
-                  <p className="mt-1 font-display text-2xl font-bold">
-                    {loading ? "—" : summary.onlineSensors}
-                    {sensorTotal !== null && (
-                      <span className="text-sm font-normal text-white/45">
-                        {` / ${sensorTotal}`}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* System Summary */}
-      <section className="mt-6" aria-labelledby="system-summary-heading">
-        <SectionLabel>System Summary</SectionLabel>
-        <h2 id="system-summary-heading" className="sr-only">
-          System Summary
-        </h2>
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            label="Kiosk sessions"
-            value={loading ? "—" : summary.kioskSessions}
-            detail="Sessions created by visitors"
-            icon={Signal}
-            accent="gold"
-          />
-          <MetricCard
-            label="Navigation queries"
-            value={loading ? "—" : summary.navigationQueries}
-            detail="Route requests received"
-            icon={Route}
-            accent="navy"
-          />
-          <MetricCard
-            label="Successful searches"
-            value={loading ? "—" : summary.successfulSearches}
-            detail="Searches resolved to a destination"
-            icon={Check}
-            accent="green"
-          />
-          <MetricCard
-            label="Failed searches"
-            value={loading ? "—" : summary.failedSearches}
-            detail="Queries requiring content or map review"
-            icon={SearchX}
-            accent="red"
-          />
+export function AdminLayout({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profile, setProfile] = useState<AdminProfile>({
+    name: "Admin Admin",
+    email: "admin@auf.edu.ph",
+    role: "Super Admin",
+  });
+  useEffect(() => {
+    if (!profileModalOpen || !isApiConfigured()) return;
+    apiClient
+      .get<AdminProfile>(endpointMap.auth.me)
+      .then(setProfile)
+      .catch(() => undefined);
+  }, [profileModalOpen]);
+  const signOut = async () => {
+    if (
+      !window.confirm(
+        "Sign out of the FlowSense Admin Dashboard? You will return to the authentication screen."
+      )
+    )
+      return;
+    if (isApiConfigured()) {
+      try {
+        await apiClient.post(endpointMap.auth.logout);
+      } catch {
+        /* Keep local exit behavior even when the API is unavailable. */
+      }
+    }
+    window.location.assign("/auth");
+  };
+  const active = (href: string) =>
+    href === "/" ? location === "/" : location.startsWith(href);
+  return (
+    <div className="min-h-screen bg-[#f7f9fc] text-[#102c4d]">
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex w-[244px] -translate-x-full flex-col bg-[#0b1f3a] px-4 py-5 transition-transform duration-200 lg:translate-x-0",
+          open && "translate-x-0"
+        )}
+      >
+        <div className="mb-9 flex items-center justify-between px-2">
+          <BrandMark />
+          <button
+            className="text-white/60 lg:hidden"
+            onClick={() => setOpen(false)}
+            aria-label="Close navigation"
+          >
+            <X size={20} />
+          </button>
         </div>
-      </section>
-
-      {/* Operations */}
-      <section className="mt-6" aria-labelledby="operations-heading">
-        <SectionLabel>Operations</SectionLabel>
-        <Card className="border-[#dbe3ed] shadow-[0_10px_30px_rgba(16,44,77,0.04)]">
-          <CardHeader className="pb-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <CardTitle
-                  id="operations-heading"
-                  className="font-display text-lg tracking-[-0.03em]"
-                >
-                  Operational overview
-                </CardTitle>
-                <p className="mt-1 text-xs text-[#8391a3]">
-                  Switch between live system conditions, crowd density, and
-                  recent administrative activity.
+        <div className="mb-4 px-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/35">
+          Operations
+        </div>
+        <nav className="space-y-1">
+          {navItems.map(({ label, href, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setOpen(false)}
+              className={cn(
+                "group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-white/60 transition hover:bg-white/8 hover:text-white",
+                active(href) &&
+                  "border-l-4 border-[#f4c542] bg-[#f4c542] font-semibold text-[#0b1f3a] shadow-[0_8px_20px_rgba(244,197,66,0.18)] hover:bg-[#f4c542] hover:text-[#0b1f3a]"
+              )}
+            >
+              <Icon size={17} strokeWidth={active(href) ? 2.4 : 1.8} />
+              <span>{label}</span>
+              {label === "Hardware Management" && (
+                <Wifi className="ml-auto opacity-50" size={14} />
+              )}
+            </Link>
+          ))}
+        </nav>
+        <div className="mt-auto space-y-1 border-t border-white/10 pt-4">
+          <Link
+            href="/settings"
+            className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/55 transition hover:bg-white/8 hover:text-white"
+          >
+            <Settings2 size={17} />
+            Settings
+          </Link>
+          <Link
+            href="/help"
+            className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/55 transition hover:bg-white/8 hover:text-white"
+          >
+            <CircleHelp size={17} />
+            Help & manual
+          </Link>
+          <div className="relative mt-4">
+            <button
+              onClick={() => setProfileOpen(!profileOpen)}
+              aria-expanded={profileOpen}
+              className="flex w-full items-center gap-3 rounded-xl bg-white/6 p-3 text-left hover:bg-white/10"
+            >
+              <Avatar className="size-8 border border-white/15">
+                <AvatarFallback className="bg-[#f4c542] text-xs font-bold text-[#0b1f3a]">
+                  AA
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-white">
+                  Admin Admin
+                </p>
+                <p className="truncate text-[11px] text-white/45">
+                  admin@auf.edu.ph
                 </p>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => window.location.assign("/analytics")}
-                className="border-[#dbe3ed] text-[#17365d]"
-              >
-                Open analytics <ArrowUpRight size={15} className="ml-2" />
-              </Button>
-            </div>
-          </CardHeader>
-
-          <CardContent>
-            <Tabs defaultValue="health" className="w-full">
-              <TabsList className="mb-5 grid h-auto w-full grid-cols-3 rounded-xl bg-[#f1f4f8] p-1">
-                <TabsTrigger value="health" className="text-xs sm:text-sm">
-                  System Health
-                </TabsTrigger>
-                <TabsTrigger value="density" className="text-xs sm:text-sm">
-                  Crowd Density
-                </TabsTrigger>
-                <TabsTrigger value="activity" className="text-xs sm:text-sm">
-                  Recent Activity
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="health" className="mt-0">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-xl border border-[#dbe3ed] bg-[#f9fbfd] p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="grid size-9 place-items-center rounded-lg bg-[#e6edf6] text-[#17365d]">
-                        <ServerCog size={17} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-[#718195]">
-                          Overall status
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-[#17365d]">
-                          {summary.systemStatus}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-[#dbe3ed] bg-[#f9fbfd] p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="grid size-9 place-items-center rounded-lg bg-[#dff5ea] text-[#13734a]">
-                        <Signal size={17} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-[#718195]">
-                          Kiosk availability
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-[#17365d]">
-                          {summary.onlineKiosks}
-                          {kioskTotal !== null ? ` / ${kioskTotal}` : " online"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-[#dbe3ed] bg-[#f9fbfd] p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="grid size-9 place-items-center rounded-lg bg-[#fff3bd] text-[#946c00]">
-                        <Gauge size={17} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-[#718195]">
-                          Average session
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-[#17365d]">
-                          {summary.averageSession}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="density" className="mt-0">
-                <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-start">
-                  <div>
-                    <div className="mb-4">
-                      <h3 className="font-display text-base font-bold text-[#17365d]">
-                        Current crowd density
-                      </h3>
-                      <p className="mt-1 text-xs text-[#8391a3]">
-                        Estimated by monitored campus zones.
-                      </p>
-                    </div>
-
-                    <div className="space-y-4">
-                      {summary.density.map(item => {
-                        const tone = densityTone(item.density);
-                        return (
-                          <div key={item.area}>
-                            <div className="mb-2 flex items-center justify-between gap-4 text-xs">
-                              <span className="font-medium text-[#40556d]">
-                                {item.area}
-                              </span>
-                              <span className={cn("font-semibold", tone.text)}>
-                                {item.density}
-                              </span>
-                            </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-[#edf1f6]">
-                              <div
-                                className={cn("h-full rounded-full", tone.bar)}
-                                style={{ width: `${Math.min(item.value, 100)}%` }}
-                              />
-                            </div>
-                            <div className="mt-1 flex justify-end">
-                              <span className={cn("text-[10px] font-semibold", tone.text)}>
-                                {item.value}% estimated occupancy
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-[#dbe3ed] bg-[#f9fbfd] p-4 lg:min-w-52">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#8493a5]">
-                      Reading guide
-                    </p>
-                    <div className="mt-4 space-y-3 text-xs">
-                      {[
-                        ["Low", "Comfortable visitor volume"],
-                        ["Moderate", "Monitor for increasing traffic"],
-                        ["High", "Consider congestion response"],
-                      ].map(([label, description]) => {
-                        const tone = densityTone(label);
-                        return (
-                          <div key={label} className="flex items-start gap-2">
-                            <span
-                              className={cn(
-                                "mt-0.5 size-2 shrink-0 rounded-full",
-                                tone.bar
-                              )}
-                            />
-                            <div>
-                              <p className="font-semibold text-[#40556d]">
-                                {label}
-                              </p>
-                              <p className="mt-0.5 text-[#8391a3]">
-                                {description}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="activity" className="mt-0">
-                <div className="space-y-4">
-                  {activity.map((event, index) => {
-                    const Icon = activityIcon(event.tone);
-                    const iconTone =
-                      event.tone === "warning"
-                        ? "bg-[#fff3bd] text-[#946c00]"
-                        : event.tone === "success"
-                          ? "bg-[#dff5ea] text-[#13734a]"
-                          : "bg-[#e3effb] text-[#275784]";
-
-                    return (
-                      <div key={event.id}>
-                        <div className="flex gap-3">
-                          <div
-                            className={cn(
-                              "grid size-9 shrink-0 place-items-center rounded-lg",
-                              iconTone
-                            )}
-                          >
-                            <Icon size={15} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                              <p className="text-sm font-semibold text-[#17365d]">
-                                {event.title}
-                              </p>
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#9aa7b6]">
-                                {formatActivityDate(event.createdAt)}
-                              </span>
-                            </div>
-                            {event.description && (
-                              <p className="mt-1 text-xs text-[#8391a3]">
-                                {event.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        {index < activity.length - 1 && <Separator className="mt-4" />}
-                      </div>
-                    );
-                  })}
-                </div>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Activity and actionable events */}
-      <div className="mt-6 grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
-        <Card className="border-[#dbe3ed]">
-          <CardHeader className="flex-row items-center justify-between">
-            <div>
-              <CardTitle className="font-display text-lg">
-                Kiosk activity over time
-              </CardTitle>
-              <p className="mt-1 text-xs text-[#8391a3]">
-                Sessions created by day
-              </p>
-            </div>
+              <ChevronDown
+                className={cn(
+                  "ml-auto text-white/35 transition",
+                  profileOpen && "rotate-180"
+                )}
+                size={14}
+              />
+            </button>
+            {profileOpen && (
+              <div className="absolute bottom-14 left-0 right-0 z-50 rounded-xl border border-white/15 bg-[#102d50] p-2 shadow-2xl">
+                <p className="px-3 py-2 text-[10px] uppercase tracking-[.14em] text-white/45">
+                  Signed in as Super Admin
+                </p>
+                <button
+                  onClick={() => {
+                    setProfileOpen(false);
+                    setProfileModalOpen(true);
+                  }}
+                  className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-white hover:bg-white/10"
+                >
+                  View profile
+                </button>
+                <button
+                  onClick={signOut}
+                  className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#f4c542] hover:bg-white/10"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+      <div className="lg:pl-[244px]">
+        <header className="sticky top-0 z-30 flex h-[68px] items-center justify-between border-b border-[#dbe3ed]/90 bg-[#f7f9fc]/90 px-5 backdrop-blur-md lg:px-9">
+          <button
+            className="rounded-lg p-2 text-[#17365d] hover:bg-[#e9eef5] lg:hidden"
+            onClick={() => setOpen(true)}
+            aria-label="Open navigation"
+          >
+            <Menu size={20} />
+          </button>
+          <div className="hidden items-center gap-2 text-xs text-[#7d8da0] lg:flex">
+            <Activity size={15} className="text-[#22a06b]" />
+            <span>Systems monitored</span>
+            <span className="font-semibold text-[#17365d]">Live</span>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
             <Badge
               variant="outline"
-              className="border-[#dbe3ed] text-[#64758a]"
+              className="hidden border-[#ccd8e6] bg-white font-medium text-[#66768a] sm:flex"
             >
-              Last 7 days
+              <Building2 size={13} className="mr-1.5" />
+              AUF Campus
             </Badge>
-          </CardHeader>
-          <CardContent>
-            <MiniBar values={activityValues} />
-            <div className="mt-3 flex justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9aa7b6]">
-              {activityLabels.map(label => (
-                <span key={label}>{label}</span>
-              ))}
+            <div className="flex items-center gap-2">
+              <Avatar className="size-8">
+                <AvatarFallback className="bg-[#dce6f2] text-xs font-bold text-[#17365d]">
+                  AA
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden text-right sm:block">
+                <p className="text-xs font-semibold">Admin Admin</p>
+                <p className="text-[10px] text-[#7b8b9d]">Super Admin</p>
+              </div>
             </div>
-            <div className="mt-4 flex items-center gap-2 text-xs text-[#8391a3]">
-              <span className="size-2 rounded-full bg-[#f4c542]" />
-              Daily kiosk sessions
-              <span className="ml-auto font-semibold text-[#17365d]">
-                Avg. {summary.averageSession} session
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-[#dbe3ed]">
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="font-display text-lg">
-                Actionable events
-              </CardTitle>
-              <Badge
-                variant="outline"
-                className="border-[#dbe3ed] text-[#64758a]"
-              >
-                {activity.length} recent
-              </Badge>
-            </div>
-            <p className="mt-1 text-xs text-[#8391a3]">
-              Items that may require administrator attention.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {activity.slice(0, 2).map((event, index) => {
-              const Icon = activityIcon(event.tone);
-              const iconTone =
-                event.tone === "warning"
-                  ? "bg-[#fff3bd] text-[#946c00]"
-                  : "bg-[#e3effb] text-[#275784]";
-
-              return (
-                <div key={event.id}>
-                  <div className="flex gap-3">
-                    <div
-                      className={cn(
-                        "grid size-8 shrink-0 place-items-center rounded-lg",
-                        iconTone
-                      )}
-                    >
-                      <Icon size={15} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[#17365d]">
-                        {event.title}
-                      </p>
-                      {event.description && (
-                        <p className="mt-1 text-xs text-[#8391a3]">
-                          {event.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {index === 0 && <Separator className="mt-4" />}
-                </div>
-              );
-            })}
-
-            <Button
-              variant="ghost"
-              className="w-full justify-between px-0 text-xs text-[#b08412] hover:bg-transparent hover:text-[#8a6500]"
-              onClick={() => window.location.assign("/analytics")}
-            >
-              View all activity <ChevronRight size={14} />
-            </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </header>
+        <main className="p-5 lg:p-9">{children}</main>
       </div>
-    </>
+      {profileModalOpen && (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-[#07182d99] p-5">
+          <div className="w-full max-w-md rounded-2xl border border-[#dbe3ed] bg-white p-6 text-[#17365d] shadow-2xl">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#b08412]">
+                  Account profile
+                </p>
+                <h2 className="mt-2 font-display text-2xl font-bold">
+                  {profile.name}
+                </h2>
+                <p className="mt-1 text-sm text-[#718398]">{profile.email}</p>
+              </div>
+              <button
+                aria-label="Close profile"
+                onClick={() => setProfileModalOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-[#dbe3ed] bg-[#f7f9fc] p-4">
+                <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#8a98a9]">
+                  Role
+                </p>
+                <p className="mt-2 text-sm font-semibold">{profile.role}</p>
+              </div>
+              <div className="rounded-xl border border-[#dbe3ed] bg-[#f7f9fc] p-4">
+                <p className="text-[10px] font-bold uppercase tracking-[.12em] text-[#8a98a9]">
+                  Session
+                </p>
+                <p className="mt-2 text-sm font-semibold text-[#168051]">
+                  Active
+                </p>
+              </div>
+            </div>
+            <Button
+              className="mt-6 w-full bg-[#17365d] text-white hover:bg-[#102c4d]"
+              onClick={() => setProfileModalOpen(false)}
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function MetricCard({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  accent = "navy",
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+  icon: typeof Activity;
+  accent?: "navy" | "gold" | "green" | "red" | "amber";
+}) {
+  const accents = {
+    navy: "bg-[#e6edf6] text-[#17365d]",
+    gold: "bg-[#fff3bd] text-[#8a6500]",
+    green: "bg-[#dff5ea] text-[#13734a]",
+    red: "bg-[#fee8e7] text-[#b13a36]",
+    amber: "bg-[#fff3bd] text-[#946c00]",
+  };
+  return (
+    <div className="rounded-2xl border border-[#dbe3ed] bg-white p-5 shadow-[0_10px_30px_rgba(16,44,77,0.04)]">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-semibold text-[#718195]">{label}</p>
+          <p className="mt-3 font-display text-3xl font-bold tracking-[-0.06em] text-[#102c4d]">
+            {value}
+          </p>
+        </div>
+        <div
+          className={cn(
+            "grid size-10 place-items-center rounded-xl",
+            accents[accent]
+          )}
+        >
+          <Icon size={18} />
+        </div>
+      </div>
+      <p className="mt-4 text-xs text-[#8a98a9]">{detail}</p>
+    </div>
   );
 }

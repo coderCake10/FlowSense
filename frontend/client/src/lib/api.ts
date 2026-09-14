@@ -48,9 +48,7 @@ export interface DensityPoint {
 export interface DashboardSummary {
   systemStatus: SystemStatus;
   onlineKiosks: number;
-  totalKiosks?: number;
   onlineSensors: number;
-  totalSensors?: number;
   kioskSessions: number;
   navigationQueries: number;
   successfulSearches: number;
