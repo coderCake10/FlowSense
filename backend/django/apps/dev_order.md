@@ -1,12 +1,12 @@
 Develop serializers in this order
 
-1. Map
-2. Navigation
-3. Search
-4. Annotation
-5. Authentication
-6. Sessions
-7. Hardware
+1. ~Map~ (RETURN LATER)
+2. ~Navigation~ (RETURN LATER)
+3. ~Search~ (RETURN LATER)
+4. ~Annotation~ (RETURN LATER)
+5. ~Authentication~ (RETURN LATER)
+6. Sessions (UD)
+7. Hardware (UD)
 8. Analytics
 9. Assets
 

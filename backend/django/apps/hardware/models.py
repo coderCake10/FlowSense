@@ -17,7 +17,6 @@ from django.db import models
 
 from map.models import Area, Floor, Node
 
-
 class Device(models.Model):
     TYPE_KIOSK = "kiosk"
     TYPE_SENSOR = "sensor"

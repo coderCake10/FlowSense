@@ -11,9 +11,13 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import sys, os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+ENV_PATH = BASE_DIR.parent.parent / '.env'
+load_dotenv(ENV_PATH)
 
 sys.path.insert(0, str(BASE_DIR / 'apps'))
 
@@ -38,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     'analytics',
     'annotation',
     'assets',
@@ -85,11 +90,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     "default": {
         "ENGINE": "django.contrib.gis.db.backends.postgis",
-        "NAME": "flowsense",
-        "USER": "postgres",
-        "PASSWORD": "postgres",
-        "HOST": "127.0.0.1",
-        "PORT": "5432",
+        "NAME": os.getenv("POSTGRES_DB", "flowsense"),
+        "USER": os.getenv("POSTGRES_USER", "postgres"),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
+        "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+        "PORT": os.getenv("POSTGRES_PORT", "5432"),
     }
 }
 
@@ -111,6 +116,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+MQTT_USER = os.getenv('MQTT_USER')
+MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -127,7 +134,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'static'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -137,3 +145,25 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 if os.name =='nt':
     GDAL_LIBRARY_PATH = r'C:\Users\65842\AppData\Local\Programs\OSGeo4W\bin\gdal313.dll'
     GEOS_LIBRARY_PATH = r'C:\Users\65842\AppData\Local\Programs\OSGeo4W\bin\geos_c.dll'
+
+# Celery and Redis Configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# Beat Schedule for Periodic Maintenance and Analytics Tasks
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-expired-sessions-every-hour': {
+        'task': 'apps.qr_sessions.tasks.cleanup_expired_sessions',
+        'schedule': crontab(minute=0, hour='*'),
+    },
+    'aggregate-daily-traffic-midnight': {
+        'task': 'apps.analytics.tasks.aggregate_daily_traffic',
+        'schedule': crontab(hour=0, minute=0),
+    },
+}

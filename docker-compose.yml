@@ -2,67 +2,170 @@ services:
   swagger-ui:
     image: swaggerapi/swagger-ui
     container_name: flowsense-swagger
-    ports:
-      - "8080:8080"
+    restart: unless-stopped
     environment:
       - SWAGGER_JSON=/spec/flowsense-openapi.yaml
     volumes:
       - ./docs/openapi:/spec:ro
-    restart: unless-stopped
+    ports:
+      - "8080:8080"
 
   # Uncomment as needed
 
-  # db:
-  #   image: postgis/postgis:16-3.4
-  #   environment:
-  #     POSTGRES_DB: flowsense
-  #     POSTGRES_USER: postgres
-  #     POSTGRES_PASSWORD: postgres
-  #   volumes:
-  #     - pgdata:/var/lib/postgresql/data
-  #   ports:
-  #     - "5432:5432"
+  mosquitto: # MQTT
+    image: eclipse-mosquitto:latest
+    container_name: flowsense_mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./backend/mosquitto/config:/mosquitto/config
+      - ./backend/mosquitto/data:/mosquitto/data
 
-  # backend:
-  #   build: ./backend
-  #   command: python manage.py runserver 0.0.0.0:8000
-  #   volumes:
-  #     - ./backend:/app
-  #   ports:
-  #     - "8000:8000"
-  #   depends_on:
-  #     - db
-  #   environment:
-  #     - DATABASE_URL=postgres://flowsense:changeme@db:5432/flowsense
+  db: # PostgreSQL / PostGIS
+    image: postgis/postgis:16-3.4
+    container_name: flowsense-db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: flowsense
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
 
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
+  backend: # Django / DRF
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.django
+    container_name: flowsense-backend
+    command: python manage.py runserver 0.0.0.0:8000
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - POSTGRES_DB=flowsense
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+    volumes:
+      - ./backend/django:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
 
-  # celery-worker:
-  #   build: ./backend
-  #   command: celery -A config worker -l info
-  #   depends_on:
-  #     - redis
-  #     - db
+  #frontend:
+  # build:
+  #   context: .
+  #   dockerfile:
+  # container_name: flowsense-frontend
+  #
+  #
+  #
+  #
+  #
+  #
+  #
+  #
+  #
 
-  # celery-beat:
-  #   build: ./backend
-  #   command: celery -A config beat -l info
-  #   depends_on:
-  #     - redis
-  #     - db
+  mqtt-consumer:  
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.django
+    container_name: flowsense-mqtt-consumer
+    restart: unless-stopped
+    command: python manage.py run_mqtt_consumer
+    volumes:
+      - ./backend/django:/app
+    depends_on:
+      - db
+      - mosquitto
+    environment:
+      - POSTGRES_DB=flowsense
+      - POSTGRES_USER=flowsense
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_HOST=db
+      - POOSTGRES_PORT=5432
+      - MQTT_USER=${MQTT_USER}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
 
-  # nginx:
-  #   image: nginx:alpine
-  #   volumes:
-  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-  #   ports:
-  #     - "80:80"
-  #   depends_on:
-  #     - backend
-  #     - swagger-ui
+  redis:
+    image: redis:7-alpine
+    container_name: flowsense_redis  
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-# volumes:
-#   pgdata:
+  celery-worker:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.django
+    container_name: flowsense-celery-worker
+    command: celery -A config worker -l info
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DB_URL}
+      - POSTGRES_DB=flowsense
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./backend/django:/app
+    depends_on:
+      - redis
+      - db
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.django
+    container_name: flowsense-celery-beat
+    command: celery -A config beat -l info
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DB_URL}
+      - POSTGRES_DB=flowsense
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./backend/django:/app
+    depends_on:
+      - redis
+      - db
+
+  nginx: # Reverse Proxy
+    image: nginx:alpine
+    container_name: flowsense_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./backend/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./backend/django/static:/app/static:ro
+    depends_on:
+      - backend
+      - swagger-ui
+
+volumes:
+  pgdata:
+  redisdata:
