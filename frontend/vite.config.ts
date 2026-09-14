@@ -31,7 +31,12 @@ export default defineConfig({
     port: 3000,
     strictPort: false,
     host: true,
-    // The managed preview proxy uses a changing hostname. This applies only to the dev server.
     allowedHosts: true,
+    hmr: process.env.VITE_HMR_CLIENT_PORT
+      ? { clientPort: Number(process.env.VITE_HMR_CLIENT_PORT) }
+      : undefined,
+    watch: process.env.CHOKIDAR_USEPOLLING
+      ? { usePolling: true, interval: 300 }
+      : undefined,
   },
 });
