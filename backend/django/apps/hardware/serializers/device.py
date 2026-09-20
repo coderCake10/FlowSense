@@ -156,6 +156,8 @@ class DeviceRegisterSerializer(serializers.Serializer):
 
 class DeviceUpdateSerializer(serializers.ModelSerializer):
     """
-    Input validation for PATCH metadata (name, node, zone)
+    Input validation for PATCH metadata (name, node, zone)[cite: 3].
     """
-    pass
+    class Meta:
+        model = Device
+        fields = ['name', 'enabled', 'status']

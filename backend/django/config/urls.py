@@ -23,5 +23,6 @@ urlpatterns = [
     path('api/navigation/', include('apps.navigation.urls')),
     path('api/search/', include('apps.search.urls')),
     path('api/annotation/', include('apps.annotation.urls')),
+    path('api/v1/sessions/', include('fs_sessions.urls')),
     path('api/hardware/', include('apps.hardware.urls')),
 ]
