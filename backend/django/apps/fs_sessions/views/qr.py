@@ -6,6 +6,7 @@ QRSessionCompleteView
 QRSessionCancelView
 '''
 
+from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -26,6 +27,10 @@ class QRSessionCreateView(APIView):
     Generates a new temporary session tied to a QR code for mobile handoff[cite: 1, 4].
     Structurally identical resource operation as NavigationSessionCreateView.
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = NavigationSessionCreateSerializer(data=request.data)
         if serializer.is_valid():
@@ -51,6 +56,10 @@ class QRSessionDetailView(APIView):
     GET /api/v1/sessions/{id}
     Retrieves the details of a specific QR handoff session[cite: 1, 4].
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def get(self, request, pk):
         session = get_object_or_404(NavigationSession, pk=pk)
         aggregated_data = services.aggregate_session_status(session)
@@ -64,6 +73,10 @@ class QRSessionScanView(APIView):
     Registers that a mobile device has scanned the QR code, officially initiating the handoff[cite: 1, 4].
     Requires the raw `qr_token` to be provided in the request body.
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def post(self, request, pk):
         session = get_object_or_404(NavigationSession, pk=pk)
         provided_token = request.data.get('qr_token')
@@ -85,6 +98,10 @@ class QRSessionCompleteView(APIView):
     Marks the QR handoff process as fully completed[cite: 1, 4].
     Delegates to the exact same logic as Navigation session completion.
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def post(self, request, pk):
         session = get_object_or_404(NavigationSession, pk=pk)
         try:
@@ -100,6 +117,10 @@ class QRSessionCancelView(APIView):
     POST /api/v1/sessions/{id}/cancel
     Cancels an unfulfilled QR session (due to idle timeout or manual user exit)[cite: 1, 4].
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def post(self, request, pk):
         session = get_object_or_404(NavigationSession, pk=pk)
         try:

@@ -22,6 +22,7 @@ import uuid
 from django.db import models
 
 from hardware.models import Kiosk
+from common.db import choice_check
 
 
 class NavigationSession(models.Model):
@@ -62,6 +63,9 @@ class NavigationSession(models.Model):
 
     class Meta:
         db_table = '"operations"."navigation_sessions"'
+        constraints = [
+            choice_check("chk_navigation_sessions_status", "status", ['created', 'active', 'scanned', 'completed', 'expired', 'cancelled']),
+        ]
 
     def __str__(self):
         return f"NavigationSession {self.id} ({self.status})"
@@ -100,6 +104,9 @@ class KioskSession(models.Model):
 
     class Meta:
         db_table = '"analytics"."kiosk_sessions"'
+        constraints = [
+            choice_check("chk_kiosk_sessions_end_reason", "end_reason", ['completed', 'idle_timeout', 'manual_exit', 'error', 'unknown'], nullable=True),
+        ]
 
     def __str__(self):
         return f"KioskSession {self.id} @ {self.kiosk_id}"

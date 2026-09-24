@@ -14,6 +14,7 @@ system (asset/version counts for status page)
 from django.db import models
 
 from map.models import Area
+from common.db import choice_check
 
 
 class Asset(models.Model):
@@ -102,6 +103,7 @@ class AssetVersion(models.Model):
         db_table = '"assets"."asset_versions"'
         constraints = [
             models.UniqueConstraint(fields=["asset", "version"], name="asset_versions_asset_version_uq"),
+            choice_check("chk_asset_versions_processing_status", "processing_status", ['pending', 'processing', 'completed', 'failed']),
         ]
 
     def __str__(self):
@@ -133,6 +135,9 @@ class ValidationRun(models.Model):
 
     class Meta:
         db_table = '"assets"."validation_runs"'
+        constraints = [
+            choice_check("chk_validation_runs_result", "result", ['passed', 'warning', 'failed']),
+        ]
 
     def __str__(self):
         return f"Validation run #{self.pk} ({self.result})"
@@ -173,6 +178,10 @@ class ValidationCheck(models.Model):
 
     class Meta:
         db_table = '"assets"."validation_checks"'
+        constraints = [
+            choice_check("chk_validation_checks_category", "category", ['file_and_format', 'model_and_geometry', 'hierarchy_and_floor_structure', 'floors_and_spatial_configuration', 'flowsense_compatibility']),
+            choice_check("chk_validation_checks_status", "status", ['passed', 'warning', 'error']),
+        ]
 
     def __str__(self):
         return f"{self.check_name} ({self.status})"

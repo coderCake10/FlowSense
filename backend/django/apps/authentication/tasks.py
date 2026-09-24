@@ -18,14 +18,12 @@ rest of the schema.
 Per the Architecture notes ("Celery — Kept inside the apps that own them
 in tasks.py"), these live here rather than in a shared tasks module.
 
-IMPORTANT — NOT YET WIRED UP: authentication/services.py's
-_send_login_challenge_email() and create_admin_user() still need a
-one-line change each to actually call
-send_login_challenge_email.delay(...) / send_admin_welcome_email.delay(...).
-Neither call exists yet (that file wasn't touched as part of adding this
-one) — until it is, these two tasks exist but are never enqueued.
+Both email tasks are queued by authentication/services.py
+(_send_login_challenge_email() and create_admin_user()) once the database
+transaction commits. The cleanup tasks run from CELERY_BEAT_SCHEDULE.
 """
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from celery import shared_task
 from django.conf import settings
@@ -56,9 +54,7 @@ SESSION_RETENTION = timedelta(days=30)
 )
 def send_login_challenge_email(self, admin_user_id: int, otp_code: str, login_link_token: str) -> None:
     """
-    Should be fired by authentication.services._send_login_challenge_email()
-    via `.delay(...)` — see this file's own NOTE at the top on why that
-    call doesn't exist yet.
+    Queued by authentication.services._send_login_challenge_email().
 
     Takes `admin_user_id` (not an AdminUser instance): Celery task
     arguments must be JSON-serializable, which is why every task in this
@@ -77,7 +73,10 @@ def send_login_challenge_email(self, admin_user_id: int, otp_code: str, login_li
         # to do but skip; there's no one left to email.
         return
 
-    login_link_url = f"{_admin_base_url()}/login/verify?token={login_link_token}"
+    # The admin sign-in page (frontend /auth) verifies automatically when it
+    # receives both values; /auth/verify needs the email alongside the token.
+    query = urlencode({"email": admin_user.email, "token": login_link_token})
+    login_link_url = f"{_admin_base_url()}/auth?{query}"
 
     # NOTE: plain-text and minimal on purpose — an HTML template
     # (django.template.loader.render_to_string) is a presentation-layer
@@ -109,17 +108,13 @@ def send_login_challenge_email(self, admin_user_id: int, otp_code: str, login_li
     retry_kwargs={"max_retries": 3},
 )
 def send_admin_welcome_email(self, admin_user_id: int) -> None:
-    """
-    Should be fired by authentication.services.create_admin_user() via
-    `.delay(admin_user.id)` — same not-yet-wired-up gap as
-    send_login_challenge_email() above.
-    """
+    """Queued by authentication.services.create_admin_user()."""
     try:
         admin_user = AdminUser.objects.get(id=admin_user_id)
     except AdminUser.DoesNotExist:
         return
 
-    login_url = f"{_admin_base_url()}/login"
+    login_url = f"{_admin_base_url()}/auth"
 
     message = (
         f"Hi {admin_user.full_name},\n\n"
@@ -141,14 +136,8 @@ def send_admin_welcome_email(self, admin_user_id: int) -> None:
 
 
 def _admin_base_url() -> str:
-    """
-    NOTE: no FLOWSENSE_ADMIN_BASE_URL (or similarly named) setting exists
-    yet in config/settings — falls back to an obviously-a-placeholder URL
-    so emails are at least generated (and visibly wrong, not silently
-    broken) rather than this task crashing outright until that setting is
-    actually added.
-    """
-    return getattr(settings, "FLOWSENSE_ADMIN_BASE_URL", "https://admin.flowsense.example")
+    """Origin of the admin frontend, from settings.FLOWSENSE_ADMIN_BASE_URL."""
+    return settings.FLOWSENSE_ADMIN_BASE_URL.rstrip("/")
 
 
 def _challenge_ttl_minutes() -> float:
@@ -162,11 +151,7 @@ def _challenge_ttl_minutes() -> float:
 # --------------------------------------------------------------------------
 # Scheduled cleanup
 # --------------------------------------------------------------------------
-# NOTE: neither task is wired into a Celery Beat schedule anywhere — that's
-# a config/celery.py / CELERY_BEAT_SCHEDULE concern, not this file. They
-# just need to exist so that schedule can reference them once someone sets
-# one up (e.g. cleanup_expired_auth_challenges every hour,
-# cleanup_expired_admin_sessions daily).
+# Scheduled in settings.CELERY_BEAT_SCHEDULE (challenges hourly, sessions daily).
 
 
 @shared_task(name="authentication.cleanup_expired_auth_challenges")

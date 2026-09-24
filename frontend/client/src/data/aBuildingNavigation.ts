@@ -1,5 +1,6 @@
 import type { BuildingConfig, Destination, Point3 } from "./navigation";
-export const MODEL_URL = "/models/a-building.glb";
+import { MODEL_FILES, modelUrl } from "./models";
+export const MODEL_URL = modelUrl(MODEL_FILES.aBuilding);
 
 export const START: Point3 = [0, 0, 0];
 export const destinations: Destination[] = [

@@ -74,7 +74,7 @@ function RouteLoader() {
       className="grid min-h-[240px] place-items-center text-sm text-[#718398]"
       role="status"
     >
-      Loading FlowSense workspace…
+      Loading FlowSense…
     </div>
   );
 }

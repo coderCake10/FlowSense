@@ -14,6 +14,7 @@ already resolves and validates the current session on every admin-gated
 request (setting request.admin_session), so that view just serializes
 request.admin_session directly rather than re-deriving it.
 """
+import logging
 import secrets
 from datetime import timedelta
 from typing import Optional
@@ -24,6 +25,28 @@ from django.utils import timezone
 from analytics.models import AuditEvent
 from authentication.models import AdminSession, AdminUser, AuthChallenge
 from common.permissions.admin import hash_session_token
+
+logger = logging.getLogger(__name__)
+
+
+def _enqueue(task, *args) -> None:
+    """
+    Queue a Celery email task once the surrounding transaction commits (so the
+    worker can see the rows it reads). A broker outage is logged rather than
+    raised: the login response is deliberately identical whether or not an
+    email goes out, so failing the request would only leak information.
+    retry=False and ignore_result=True make an outage fail fast: otherwise the
+    request stalls ~20 s while Celery retries the broker and result store.
+    Email tasks have no result anyone reads.
+    """
+
+    def send():
+        try:
+            task.apply_async(args=args, retry=False, ignore_result=True)
+        except Exception:  # noqa: BLE001 - any broker/connection failure
+            logger.exception("Could not queue %s", task.name)
+
+    transaction.on_commit(send)
 
 # `hash_session_token` is genuinely just `sha256(x).hexdigest()` — reused
 # here under a clearer local name for challenge tokens too, rather than
@@ -135,18 +158,13 @@ def _send_login_challenge_email(
     admin_user: AdminUser, *, otp_code: str, login_link_token: str
 ) -> None:
     """
-    NOTE (not implemented): should enqueue a Celery task — e.g.
-    authentication.tasks.send_login_challenge_email — that emails
-    `admin_user` their OTP code and login-link URL. Deliberately not sent
-    synchronously here: blocking the request thread on an SMTP round-trip
-    is exactly what the Celery task queue in the stack exists to avoid.
-
-    This is currently a no-op so initiate_login() doesn't crash for lack
-    of a tasks.py — but that also means NO EMAIL IS ACTUALLY SENT yet.
-    The login flow can't be considered functionally complete until
-    authentication/tasks.py exists and this function calls into it.
+    Emails `admin_user` their OTP code and login link through Celery
+    (authentication.tasks.send_login_challenge_email), not synchronously:
+    the request thread must not wait on SMTP.
     """
-    pass
+    from authentication import tasks
+
+    _enqueue(tasks.send_login_challenge_email, admin_user.id, otp_code, login_link_token)
 
 
 # --------------------------------------------------------------------------
@@ -262,14 +280,15 @@ def create_admin_user(*, validated_data: dict, actor: Optional[AdminUser] = None
     """
     POST /users. The create itself is a plain model create — the only
     reason this is a service function rather than left to the
-    serializer's own .save() is the audit log (and the not-yet-built
-    "you've been added as an administrator" notification email — same gap
-    as _send_login_challenge_email() above; no authentication/tasks.py
-    exists yet).
+    serializer's own .save() is the audit log and the "you've been added as
+    an administrator" email (authentication.tasks.send_admin_welcome_email).
     """
+    from authentication import tasks
+
     with transaction.atomic():
         admin_user = AdminUser.objects.create(**validated_data)
         _log_admin_change(actor=actor, action=AuditEvent.ACTION_CREATE, instance=admin_user)
+        _enqueue(tasks.send_admin_welcome_email, admin_user.id)
     return admin_user
 
 

@@ -31,6 +31,11 @@ export default defineConfig({
     port: 3000,
     strictPort: false,
     host: true,
+    // Local dev without nginx: forward /api to Django (runserver on :8000).
+    // In Docker, nginx serves /api on the same origin and this is unused.
+    proxy: {
+      "/api": process.env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:8000",
+    },
     allowedHosts: true,
     hmr: process.env.VITE_HMR_CLIENT_PORT
       ? { clientPort: Number(process.env.VITE_HMR_CLIENT_PORT) }

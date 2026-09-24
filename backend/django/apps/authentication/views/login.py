@@ -19,6 +19,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from authentication import services
+from common.throttling import LoginIpThrottle
 from authentication.serializers import LoginRequestSerializer, LoginResponseSerializer
 
 
@@ -26,6 +27,7 @@ class LoginView(APIView):
     """Public — this is how an admin BEGINS authenticating, so it can't require it."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [LoginIpThrottle]
 
     def post(self, request, *args, **kwargs):
         input_serializer = LoginRequestSerializer(data=request.data)

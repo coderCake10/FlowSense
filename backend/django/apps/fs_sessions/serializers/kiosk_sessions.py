@@ -23,6 +23,9 @@ class KioskSessionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = KioskSession
         fields = ["kiosk"]
+        # The model FK is nullable (SET NULL keeps history when a kiosk is
+        # removed), but a new session must name its kiosk.
+        extra_kwargs = {"kiosk": {"required": True, "allow_null": False}}
 
 
 class KioskSessionSerializer(serializers.ModelSerializer):

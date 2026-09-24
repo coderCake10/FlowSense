@@ -109,3 +109,11 @@ temp/
 .webdev/
 
 .project-config.json
+
+# Browser QA artifacts
+e2e/output/
+
+# Building models are installed per machine, not stored in git
+# (see docs/setup/building-models.md).
+client/public/models/*
+!client/public/models/README.md

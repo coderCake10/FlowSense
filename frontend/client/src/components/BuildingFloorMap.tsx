@@ -12,7 +12,7 @@ import { Html, Line, OrbitControls, useGLTF } from "@react-three/drei";
 import type { BuildingConfig, Destination, Point3 } from "@/data/navigation";
 
 class MapErrorBoundary extends Component<
-  { children: ReactNode },
+  { children: ReactNode; modelUrl: string },
   { failed: boolean }
 > {
   state = { failed: false };
@@ -25,7 +25,17 @@ class MapErrorBoundary extends Component<
         role="alert"
         className="grid h-full place-content-center gap-3 p-8 text-center"
       >
-        <p>The building model could not be loaded.</p>
+        <p>This building's map isn't available on this kiosk right now.</p>
+        {import.meta.env.DEV && (
+          // Models are not in git; a fresh checkout has none until they are
+          // copied in. Tell developers exactly which file is missing.
+          <p className="max-w-md text-xs text-[#718398]">
+            Missing or unreadable model file <code>{this.props.modelUrl}</code>.
+            Copy it into <code>frontend/client/public/models/</code> and run{" "}
+            <code>pnpm run models:check</code> (see
+            docs/setup/building-models.md).
+          </p>
+        )}
         <button className="underline" onClick={() => window.location.reload()}>
           Reload map
         </button>
@@ -69,6 +79,10 @@ function Building({ building }: { building: BuildingConfig }) {
   }, [scene, building]);
   return <primitive object={displayScene} />;
 }
+/** Keep DOM labels below app overlays (dialogs, keyboard use z-50). drei's
+ * default range (~16.7M) would paint map labels on top of every modal. */
+const LABEL_Z_RANGE: [number, number] = [10, 0];
+
 function Marker({
   point,
   label,
@@ -87,6 +101,7 @@ function Marker({
       <Html
         position={[0, label === "You are here" ? 3.5 : 1.1, 0]}
         center
+        zIndexRange={LABEL_Z_RANGE}
         style={{ pointerEvents: "none" }}
       >
         <span
@@ -112,7 +127,10 @@ export function BuildingFloorMap({
       className="relative h-full min-h-[320px] w-full"
       aria-label={`${building.name} · ${building.floor} map${destination ? `, route to ${destination.code}` : ""}`}
     >
-      <MapErrorBoundary key={`${building.id}:${building.modelUrl}:${view}`}>
+      <MapErrorBoundary
+        key={`${building.id}:${building.modelUrl}:${view}`}
+        modelUrl={building.modelUrl}
+      >
         <Canvas
           key={view}
           orthographic
@@ -130,7 +148,7 @@ export function BuildingFloorMap({
           <directionalLight position={[10, 40, 20]} intensity={2} />
           <Suspense
             fallback={
-              <Html center>
+              <Html center zIndexRange={LABEL_Z_RANGE}>
                 <div
                   role="status"
                   className="whitespace-nowrap rounded-xl bg-white p-4 shadow"
@@ -179,7 +197,7 @@ export function BuildingFloorMap({
           />
         </Canvas>
       </MapErrorBoundary>
-      <div className="absolute right-4 top-4 flex gap-2">
+      <div className="absolute right-4 top-4 z-20 flex gap-2">
         <span className="rounded-lg bg-white/95 px-3 py-2 text-xs font-bold shadow">
           {building.name} · {building.floor}
         </span>
@@ -190,7 +208,7 @@ export function BuildingFloorMap({
           Reset view
         </button>
       </div>
-      <p className="absolute bottom-4 left-4 rounded-lg bg-white/95 px-3 py-2 text-xs text-[#52657a]">
+      <p className="absolute bottom-4 left-4 z-20 rounded-lg bg-white/95 px-3 py-2 text-xs text-[#52657a]">
         Drag to rotate · Scroll to zoom · Right-drag to pan
       </p>
     </div>

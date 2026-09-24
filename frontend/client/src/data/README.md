@@ -27,9 +27,11 @@ Adjust clipping distances and zoom limits for the model's scale. These values
 are manually configured, not inferred from the GLB.
 
 Changing the selection clears search, destination, active navigation, keyboard,
-queue, and QR preview, and resets the map view. The existing QR display remains
-a placeholder rather than a scannable mobile handoff.
+queue, and QR handoff, and resets the map view. The kiosk's QR code encodes the
+building ID and destination IDs, and the phone resolves them against this same
+registry. **Renaming a configuration ID or destination ID invalidates any QR
+codes already issued for it.**
 
 After registering a model, run `npm run check` and `npm run build` from the
-frontend directory. In the kiosk, verify framing, corridor routes, queue/QR,
+frontend directory. In the kiosk, verify framing, corridor routes, queue, the QR handoff on a phone,
 reset view, and switching away from and back to each building.

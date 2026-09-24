@@ -33,6 +33,7 @@ from authentication.models import AdminUser
 from hardware.models import Kiosk, Sensor
 from map.models import Node
 from fs_sessions.models import NavigationSession
+from common.db import choice_check
 
 
 class NavigationRequest(models.Model):
@@ -73,6 +74,9 @@ class NavigationRequest(models.Model):
 
     class Meta:
         db_table = '"analytics"."navigation_requests"'
+        constraints = [
+            choice_check("chk_navigation_requests_status", "status", ['requested', 'generated', 'failed', 'completed']),
+        ]
         indexes = [
             models.Index(fields=["-started_at"], name="idx_navigation_requests_time"),
         ]
@@ -137,6 +141,9 @@ class QrEvent(models.Model):
 
     class Meta:
         db_table = '"analytics"."qr_events"'
+        constraints = [
+            choice_check("chk_qr_events_event_type", "event_type", ['generated', 'scanned', 'expired', 'invalid']),
+        ]
         indexes = [
             models.Index(fields=["-created_at"], name="idx_qr_events_created"),
         ]
@@ -197,6 +204,10 @@ class AuditEvent(models.Model):
 
     class Meta:
         db_table = '"analytics"."audit_events"'
+        constraints = [
+            choice_check("chk_audit_events_event_type", "event_type", ['asset', 'configuration', 'validation', 'administrative']),
+            choice_check("chk_audit_events_action", "action", ['create', 'update', 'delete', 'upload', 'replace', 'restore', 'validate', 'activate', 'deactivate']),
+        ]
         indexes = [
             models.Index(fields=["-created_at"], name="idx_audit_events_created"),
             models.Index(fields=["admin_user"], name="idx_audit_events_user"),
@@ -316,6 +327,10 @@ class Alert(models.Model):
 
     class Meta:
         db_table = '"operations"."alerts"'
+        constraints = [
+            choice_check("chk_alerts_severity", "severity", ['informational', 'warning', 'critical']),
+            choice_check("chk_alerts_alert_type", "alert_type", ['informational', 'warning', 'critical']),
+        ]
         indexes = [
             models.Index(
                 fields=["-created_at"],

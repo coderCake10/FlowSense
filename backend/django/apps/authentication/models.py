@@ -14,6 +14,7 @@ settings (Setting.updated_by)
 import uuid
 
 from django.db import models
+from common.db import choice_check
 
 
 class AdminUser(models.Model):
@@ -36,6 +37,9 @@ class AdminUser(models.Model):
 
     class Meta:
         db_table = '"operations"."admin_users"'
+        constraints = [
+            choice_check("chk_admin_users_role", "role", ['admin', 'super admin']),
+        ]
         verbose_name = "Admin User"
         verbose_name_plural = "Admin Users"
 
@@ -68,6 +72,9 @@ class AuthChallenge(models.Model):
 
     class Meta:
         db_table = '"operations"."auth_challenges"'
+        constraints = [
+            choice_check("chk_auth_challenges_challenge_type", "challenge_type", ['otp', 'login_link']),
+        ]
         indexes = [
             models.Index(fields=["expires_at"], name="idx_auth_challenges_expires"),
         ]

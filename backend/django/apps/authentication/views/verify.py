@@ -4,6 +4,7 @@ apps/authentication/views/verify.py
 Backs:
   POST /api/v1/auth/verify
 """
+from django.conf import settings
 from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.permissions import AllowAny
@@ -13,6 +14,7 @@ from rest_framework.views import APIView
 from authentication import services
 from authentication.serializers import VerifyRequestSerializer, VerifyResponseSerializer
 from common.permissions.admin import ADMIN_SESSION_COOKIE_NAME
+from common.throttling import VerifyEmailThrottle, VerifyIpThrottle
 
 
 class VerificationFailed(APIException):
@@ -25,6 +27,7 @@ class VerifyView(APIView):
     """Public — same reasoning as LoginView; this IS the login step itself."""
 
     permission_classes = [AllowAny]
+    throttle_classes = [VerifyIpThrottle, VerifyEmailThrottle]
 
     def post(self, request, *args, **kwargs):
         input_serializer = VerifyRequestSerializer(data=request.data)
@@ -56,17 +59,15 @@ class VerifyView(APIView):
         # VerifyResponseSerializer's own NOTE) and never persisted
         # anywhere except as its hash (operations.admin_sessions.session_token_hash).
         #
-        # secure=True matches the Security Architecture notes ("Secure
-        # HTTP Cookies"); a local HTTP-only dev environment will need to
-        # either run behind HTTPS (Nginx, per the deployment notes) or
-        # override this — not relaxed here by default, since "insecure by
-        # default for developer convenience" is the wrong default for an
-        # admin session cookie.
+        # Secure by default, matching the Security Architecture notes
+        # ("Secure HTTP Cookies"). ADMIN_SESSION_COOKIE_SECURE=False is only
+        # for plain-HTTP local/LAN setups: browsers drop Secure cookies
+        # set over HTTP (other than on localhost).
         response.set_cookie(
             ADMIN_SESSION_COOKIE_NAME,
             result["raw_session_token"],
             httponly=True,
-            secure=True,
+            secure=settings.ADMIN_SESSION_COOKIE_SECURE,
             samesite="Lax",
             expires=result["session"].expires_at,
         )

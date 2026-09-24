@@ -24,13 +24,31 @@ sys.path.insert(0, str(BASE_DIR / 'apps'))
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-6c7@)p!2k6*-y-nfl^$1e8cz3_*&vo$(%)#h1l8!d9*2g+l%ni'
+def env_bool(name, default=False):
+    return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
+
+
+def env_list(name, default=""):
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool("DJANGO_DEBUG", True)
 
-ALLOWED_HOSTS = []
+# SECURITY WARNING: keep the secret key used in production secret! The
+# fallback is for local development only and is refused when DEBUG is off.
+SECRET_KEY = os.getenv(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-6c7@)p!2k6*-y-nfl^$1e8cz3_*&vo$(%)#h1l8!d9*2g+l%ni",
+)
+if not DEBUG and SECRET_KEY.startswith("django-insecure-"):
+    raise RuntimeError("Set DJANGO_SECRET_KEY when DJANGO_DEBUG is off.")
+
+# nginx forwards the browser's Host header (localhost, the kiosk's LAN IP, or
+# a hostname); list them in DJANGO_ALLOWED_HOSTS for non-debug deployments.
+# Debug accepts any host so a kiosk or phone can reach the dev stack by LAN IP.
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS") or (["*"] if DEBUG else [])
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 
 # Application definition
@@ -42,12 +60,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.gis',
+    'django.contrib.postgres',
     'rest_framework',
     'analytics',
     'annotation',
     'assets',
     'authentication',
     'common',
+    'configuration',
     'fs_sessions',
     'hardware',
     'map',
@@ -57,6 +78,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'common.middleware.ApiTrailingSlashMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -83,6 +105,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+TEST_RUNNER = 'config.test_runner.FlowSenseTestRunner'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
@@ -116,8 +139,49 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+MQTT_HOST = os.getenv('MQTT_HOST', 'mosquitto')
+MQTT_PORT = int(os.getenv('MQTT_PORT', '1883'))
 MQTT_USER = os.getenv('MQTT_USER')
 MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
+
+# Django REST Framework: admin-only unless a view opts out explicitly
+# (public kiosk/mobile endpoints set AllowAny). See common.permissions.
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'common.authentication.AdminSessionCookieAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'common.permissions.IsAdminUser',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'auth_login': os.getenv('THROTTLE_AUTH_LOGIN', '5/min'),
+        'auth_verify': os.getenv('THROTTLE_AUTH_VERIFY', '10/min'),
+        'auth_verify_email': os.getenv('THROTTLE_AUTH_VERIFY_EMAIL', '10/hour'),
+    },
+    'UNAUTHENTICATED_USER': None,
+}
+
+# Throttle counters need a cache shared by every backend process; Redis in
+# Docker, per-process memory for local runs.
+if os.getenv('REDIS_CACHE_URL'):
+    CACHES = {'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': os.getenv('REDIS_CACHE_URL'),
+    }}
+
+# Admin sign-in (passwordless). Emails go to the console unless SMTP is set.
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', True)
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'FlowSense <no-reply@flowsense.local>')
+# Where links in admin emails point (the admin frontend's origin).
+FLOWSENSE_ADMIN_BASE_URL = os.getenv('FLOWSENSE_ADMIN_BASE_URL', 'http://localhost')
+# Browsers drop Secure cookies over plain HTTP (except on localhost); set to
+# False only for HTTP LAN setups.
+ADMIN_SESSION_COOKIE_SECURE = env_bool('ADMIN_SESSION_COOKIE_SECURE', True)
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -153,17 +217,24 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+# Run tasks inline (no worker/broker) for local development and tests.
+CELERY_TASK_ALWAYS_EAGER = env_bool('CELERY_TASK_ALWAYS_EAGER', False)
 
 # Beat Schedule for Periodic Maintenance and Analytics Tasks
 from celery.schedules import crontab
 
+# Task names must match registered tasks (tests assert this).
 CELERY_BEAT_SCHEDULE = {
     'cleanup-expired-sessions-every-hour': {
-        'task': 'apps.qr_sessions.tasks.cleanup_expired_sessions',
+        'task': 'fs_sessions.tasks.cleanup_expired_sessions',
         'schedule': crontab(minute=0, hour='*'),
     },
-    'aggregate-daily-traffic-midnight': {
-        'task': 'apps.analytics.tasks.aggregate_daily_traffic',
-        'schedule': crontab(hour=0, minute=0),
+    'cleanup-expired-auth-challenges-every-hour': {
+        'task': 'authentication.cleanup_expired_auth_challenges',
+        'schedule': crontab(minute=15, hour='*'),
+    },
+    'cleanup-expired-admin-sessions-daily': {
+        'task': 'authentication.cleanup_expired_admin_sessions',
+        'schedule': crontab(minute=30, hour=3),
     },
 }

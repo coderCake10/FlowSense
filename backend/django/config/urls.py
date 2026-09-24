@@ -15,14 +15,19 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import include, path
 
+# Every API route lives under /api/v1/, as specified in
+# architecture-notes-main/07 API/00 API Design.md. Paths may be called with
+# or without a trailing slash (see common.middleware.ApiTrailingSlashMiddleware).
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/map/', include('apps.map.urls')),
-    path('api/navigation/', include('apps.navigation.urls')),
-    path('api/search/', include('apps.search.urls')),
-    path('api/annotation/', include('apps.annotation.urls')),
+    # Authentication API (/auth/*) and Users API (/users) share one app.
+    path('api/v1/', include('authentication.urls')),
+    path('api/v1/map/', include('map.urls')),
+    path('api/v1/navigation/', include('navigation.urls')),
+    path('api/v1/search/', include('search.urls')),
+    path('api/v1/annotations/', include('annotation.urls')),
     path('api/v1/sessions/', include('fs_sessions.urls')),
-    path('api/hardware/', include('apps.hardware.urls')),
+    path('api/v1/hardware/', include('hardware.urls')),
 ]

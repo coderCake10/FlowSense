@@ -4,7 +4,8 @@
  * Keep this asset and its coordinates together when replacing the model.
  */
 import type { BuildingConfig, Destination, Point3 } from "./navigation";
-export const MODEL_URL = "/models/eya-floor-1.glb";
+import { MODEL_FILES, modelUrl } from "./models";
+export const MODEL_URL = modelUrl(MODEL_FILES.eyaFloor1);
 // Lobby center, inside the entrance.
 export const START: Point3 = [0, 1.02, 28.5];
 export const START_OBJECT = "GEO-foot.005_male_primitive_realistic.L";
@@ -12,7 +13,7 @@ export const destinations: Destination[] = [
   {
     id: "guidance",
     name: "Guidance and Counseling Center Extension Office",
-    code: "EA-101-A",
+    code: "EA-101A",
     door: "DOOR_.001",
     color: "#2563EB",
     points: [

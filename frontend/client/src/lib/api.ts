@@ -21,6 +21,22 @@ export interface AdminProfile {
   role: "Admin" | "Super Admin";
 }
 
+/** GET /auth/me response (backend AdminUserSerializer). */
+export interface AdminMe {
+  id: number;
+  full_name: string;
+  email: string;
+  role: "admin" | "super admin";
+}
+
+export function toAdminProfile(me: AdminMe): AdminProfile {
+  return {
+    name: me.full_name,
+    email: me.email,
+    role: me.role === "super admin" ? "Super Admin" : "Admin",
+  };
+}
+
 export interface Device {
   id: string;
   name: string;
@@ -65,6 +81,17 @@ export interface ApiClient {
   delete<T>(path: string): Promise<T>;
 }
 
+/** Non-2xx API response; `status` lets callers distinguish 4xx from outages. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
@@ -76,8 +103,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(
-      `${init?.method ?? "GET"} ${path} failed with ${response.status}`
+    throw new ApiError(
+      `${init?.method ?? "GET"} ${path} failed with ${response.status}`,
+      response.status
     );
   }
 

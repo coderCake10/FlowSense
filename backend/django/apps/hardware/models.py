@@ -16,6 +16,7 @@ system (device/kiosk/sensor counts for status page)
 from django.db import models
 
 from map.models import Area, Floor, Node
+from common.db import choice_check
 
 class Device(models.Model):
     TYPE_KIOSK = "kiosk"
@@ -62,6 +63,10 @@ class Device(models.Model):
 
     class Meta:
         db_table = '"hardware"."devices"'
+        constraints = [
+            choice_check("chk_devices_device_type", "device_type", ['kiosk', 'sensor']),
+            choice_check("chk_devices_status", "status", ['unregistered', 'registered', 'online', 'offline', 'disabled', 'decommissioned']),
+        ]
         indexes = [
             models.Index(fields=["status"], name="idx_devices_status"),
             models.Index(fields=["device_type"], name="idx_devices_type"),
@@ -183,6 +188,9 @@ class Sensor(models.Model):
 
     class Meta:
         db_table = '"hardware"."sensors"'
+        constraints = [
+            choice_check("chk_sensors_mqtt_status", "mqtt_status", ['online', 'offline', 'unknown'], nullable=True),
+        ]
 
     def __str__(self):
         return self.device.name or self.device.device_id

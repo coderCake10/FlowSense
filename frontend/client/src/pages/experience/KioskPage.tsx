@@ -1,17 +1,37 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  Check,
+  ListPlus,
+  ListOrdered,
   Search,
-  X,
   Navigation,
   MapPin,
-  QrCode,
+  RotateCcw,
+  Smartphone,
+  Square,
+  Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
+import { QRCodeSVG } from "qrcode.react";
 import { BrandMark } from "@/components/FlowSenseShell";
 import { BuildingFloorMap } from "@/components/BuildingFloorMap";
 import { buildings } from "@/data/buildings";
 import type { Destination } from "@/data/navigation";
+import {
+  activateQueue,
+  addToQueue,
+  isQueued,
+  nextStop,
+  removeFromQueue,
+} from "@/lib/kioskQueue";
+import {
+  createHandoff,
+  handoffUrl,
+  newSessionId,
+  publicBaseUrl,
+} from "@/lib/handoff";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -19,7 +39,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
 export function KioskPage() {
@@ -28,8 +47,14 @@ export function KioskPage() {
   const [selected, setSelected] = useState<Destination | null>(null);
   const [active, setActive] = useState(false);
   const [keyboard, setKeyboard] = useState(false);
+  const [queue, setQueue] = useState<Destination[]>([]);
   const [queueOpen, setQueueOpen] = useState(false);
-  const [showQr, setShowQr] = useState(false);
+  /** Handoff session for the open queue modal; issued when the modal opens. */
+  const [handoff, setHandoff] = useState<{
+    id: string;
+    issuedAt: number;
+  } | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const reset = () => {
@@ -49,6 +74,80 @@ export function KioskPage() {
   const shown = building.destinations.filter(d =>
     `${d.name} ${d.code}`.toLowerCase().includes(search.toLowerCase())
   );
+  const upNext = nextStop(queue, selected?.id ?? null);
+  const handoffLink =
+    handoff && queue.length
+      ? (() => {
+          const payload = createHandoff(
+            building,
+            queue,
+            handoff.issuedAt,
+            handoff.id
+          );
+          return {
+            url: handoffUrl(payload, publicBaseUrl()),
+            expiresAt: new Date(payload.exp * 1000).toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            }),
+          };
+        })()
+      : null;
+
+  const startNavigation = (destination: Destination) => {
+    setSelected(destination);
+    setActive(true);
+    setKeyboard(false);
+    setQueueOpen(false);
+  };
+  /** Clears the current pick so the visitor can choose again. */
+  const changeDestination = () => {
+    setSelected(null);
+    setActive(false);
+    searchRef.current?.focus();
+  };
+  /** Finishing a route also removes it from the queue. */
+  const endRoute = () => {
+    if (selected) setQueue(q => removeFromQueue(q, selected.id));
+    setSelected(null);
+    setActive(false);
+  };
+  const goToNextStop = () => {
+    if (!upNext) return;
+    if (selected) setQueue(q => removeFromQueue(q, selected.id));
+    startNavigation(upNext);
+  };
+  const queueSelected = () => {
+    if (!selected || isQueued(queue, selected.id)) return;
+    setQueue(q => addToQueue(q, selected));
+    toast.success(`${selected.code} added to your queue`);
+  };
+  /** Navigate (per the kiosk spec): activate the queue, start the first stop,
+   * and open the queue modal with the stop list and the phone handoff QR. */
+  const navigate = () => {
+    const next = activateQueue(queue, selected);
+    if (!next.length) return;
+    setQueue(next);
+    setSelected(next[0]);
+    setActive(true);
+    setKeyboard(false);
+    showQueue();
+  };
+  /** Opens the queue modal with a fresh handoff session (new QR, new expiry). */
+  const showQueue = () => {
+    setHandoff({ id: newSessionId(), issuedAt: Date.now() });
+    setQueueOpen(true);
+  };
+  const openQueue = showQueue;
+  /** Removing the stop being navigated also ends that route. */
+  const removeStop = (id: string) => {
+    setQueue(q => removeFromQueue(q, id));
+    if (active && selected?.id === id) {
+      setSelected(null);
+      setActive(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f7f9fc] text-[#17365d]">
       <header className="flex min-h-[72px] items-center justify-between gap-4 border-b border-[#dbe3ed] bg-white px-6 py-3">
@@ -84,6 +183,7 @@ export function KioskPage() {
               className="absolute left-3 top-3 text-slate-500"
             />
             <input
+              ref={searchRef}
               aria-label="Search destinations"
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -110,8 +210,8 @@ export function KioskPage() {
               setSelected(null);
               setActive(false);
               setKeyboard(false);
+              setQueue([]);
               setQueueOpen(false);
-              setShowQr(false);
             }}
             className="mt-3 h-9 w-full border border-[#17365d] bg-white px-2 text-xs text-[#17365d]"
           >
@@ -150,6 +250,7 @@ export function KioskPage() {
                   </span>
                   <span className="text-[10px] uppercase text-white/48">
                     {d.floor}
+                    {isQueued(queue, d.id) && " · In queue"}
                   </span>
                 </span>
                 <span className="shrink-0 whitespace-nowrap text-xs text-white/65">
@@ -201,114 +302,193 @@ export function KioskPage() {
                     {building.floor}
                   </p>
                 </div>
-                <Dialog
-                  open={queueOpen}
-                  onOpenChange={open => {
-                    setQueueOpen(open);
-                    setShowQr(false);
-                  }}
-                >
-                  <DialogTrigger asChild>
-                    <button className="flex shrink-0 items-center gap-2 rounded-lg border border-[#17365d] px-5 py-3 text-sm font-bold">
-                      <QrCode size={17} />
-                      {active ? "Destination Queue" : "Add to queue"}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={changeDestination}
+                    className="flex shrink-0 items-center gap-2 rounded-lg border border-[#dbe3ed] px-4 py-3 text-sm font-semibold text-[#52657a] hover:border-[#17365d] hover:text-[#17365d]"
+                  >
+                    <RotateCcw size={16} />
+                    Change destination
+                  </button>
+                  {!active && (
+                    <button
+                      onClick={queueSelected}
+                      disabled={isQueued(queue, selected.id)}
+                      className="flex shrink-0 items-center gap-2 rounded-lg border border-[#17365d] px-4 py-3 text-sm font-bold disabled:border-[#cfe3d8] disabled:text-[#168051]"
+                    >
+                      {isQueued(queue, selected.id) ? (
+                        <>
+                          <Check size={16} />
+                          In queue
+                        </>
+                      ) : (
+                        <>
+                          <ListPlus size={16} />
+                          Add to queue
+                        </>
+                      )}
                     </button>
-                  </DialogTrigger>
-                  <DialogContent className="max-h-[90vh] overflow-y-auto bg-white text-[#17365d] sm:max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>
-                        {showQr
-                          ? "Continue on your phone"
-                          : "Destination Queue"}
-                      </DialogTitle>
-                      <DialogDescription>
-                        {showQr
-                          ? `QR handoff for ${selected.name}.`
-                          : "Your selected destination is ready for navigation."}
-                      </DialogDescription>
-                    </DialogHeader>
-                    {showQr ? (
-                      <div className="space-y-5 text-center">
-                        <QrCode
-                          size={180}
-                          className="mx-auto"
-                          aria-hidden="true"
-                        />
-                        <p className="text-xs text-[#718398]">
-                          QR preview — mobile handoff is not connected yet.
-                        </p>
-                        <button
-                          onClick={() => setShowQr(false)}
-                          className="rounded-lg border border-[#17365d] px-5 py-3 text-sm font-bold"
-                        >
-                          Back to queue
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="grid gap-6 sm:grid-cols-[1fr_180px]">
-                        <div className="rounded border border-[#dbe3ed] p-4">
-                          <p className="font-bold">{selected.name}</p>
-                          <p className="mt-1 text-xs text-[#718398]">
-                            {selected.code} · {selected.building} ·{" "}
-                            {selected.floor}
-                          </p>
-                          <button
-                            onClick={() => {
-                              setQueueOpen(false);
-                              setActive(true);
-                            }}
-                            className="mt-6 flex items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white"
-                          >
-                            Start Navigation <ArrowRight size={15} />
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => setShowQr(true)}
-                          className="grid min-h-40 place-items-center gap-3 rounded border border-[#17365d] bg-[#fbfcfe] p-4 text-center"
-                        >
-                          <QrCode size={74} aria-hidden="true" />
-                          <span className="text-xs font-semibold">
-                            Show QR display
-                          </span>
-                        </button>
-                      </div>
-                    )}
-                  </DialogContent>
-                </Dialog>
-                <button
-                  className="flex shrink-0 items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white"
-                  onClick={() => {
-                    if (active) {
-                      setSelected(null);
-                      setActive(false);
-                    } else {
-                      setShowQr(false);
-                      setQueueOpen(true);
-                    }
-                  }}
-                >
-                  <Navigation size={17} />
-                  {active ? "End route" : "Navigate"}
-                </button>
-                <button
-                  aria-label="Clear selected destination"
-                  onClick={() => {
-                    setSelected(null);
-                    setActive(false);
-                  }}
-                  className="rounded-lg border p-3"
-                >
-                  <X size={18} />
-                </button>
+                  )}
+                  {queue.length > 0 && (
+                    <QueueButton count={queue.length} onClick={openQueue} />
+                  )}
+                  {active && upNext && (
+                    <button
+                      onClick={goToNextStop}
+                      className="flex shrink-0 items-center gap-2 rounded-lg border border-[#17365d] px-4 py-3 text-sm font-bold"
+                    >
+                      Next stop · {upNext.code}
+                      <ArrowRight size={16} />
+                    </button>
+                  )}
+                  <button
+                    className="flex shrink-0 items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white"
+                    onClick={active ? endRoute : navigate}
+                  >
+                    {active ? <Square size={15} /> : <Navigation size={17} />}
+                    {active ? "End route" : "Navigate"}
+                  </button>
+                </div>
               </div>
             ) : (
-              <p className="text-sm text-[#718398]">
-                Select an office to see the walking route from this kiosk.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <p className="text-sm text-[#718398]">
+                  Select an office to see the walking route from this kiosk.
+                </p>
+                {queue.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <QueueButton count={queue.length} onClick={openQueue} />
+                    <button
+                      onClick={navigate}
+                      className="flex shrink-0 items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white"
+                    >
+                      <Navigation size={17} />
+                      Navigate
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </section>
       </main>
+      <Dialog open={queueOpen} onOpenChange={setQueueOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto bg-white text-[#17365d] sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Destination queue</DialogTitle>
+            <DialogDescription>
+              {active
+                ? "Follow the highlighted route on the map, or scan the code to continue on your phone."
+                : "Stops are visited in order. Press Navigate to start."}
+            </DialogDescription>
+          </DialogHeader>
+          {queue.length === 0 ? (
+            <p
+              role="status"
+              className="py-6 text-center text-sm text-[#718398]"
+            >
+              Your queue is empty. Select a destination and choose "Add to
+              queue" or "Navigate".
+            </p>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_220px]">
+              <ol
+                aria-label="Queued stops"
+                className="divide-y divide-[#dbe3ed] self-start rounded-lg border border-[#dbe3ed]"
+              >
+                {queue.map((item, index) => {
+                  const current = active && selected?.id === item.id;
+                  return (
+                    <li key={item.id} className="flex items-center gap-3 p-3">
+                      <span
+                        className={cn(
+                          "grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold",
+                          current ? "bg-[#17365d] text-white" : "bg-[#eef3f7]"
+                        )}
+                      >
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">
+                          {item.name}
+                        </span>
+                        <span className="text-xs text-[#718398]">
+                          {item.code} · {item.floor}
+                          {current && " · Navigating now"}
+                        </span>
+                      </span>
+                      {!current && (
+                        <button
+                          onClick={() => startNavigation(item)}
+                          className="flex items-center gap-1.5 rounded-lg bg-[#17365d] px-3 py-2 text-xs font-bold text-white"
+                        >
+                          <Navigation size={13} />
+                          Go
+                        </button>
+                      )}
+                      <button
+                        aria-label={`Remove ${item.code} from queue`}
+                        onClick={() => removeStop(item.id)}
+                        className="rounded-lg border border-[#dbe3ed] p-2 text-[#52657a] hover:text-[#b13a36]"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+              <section
+                aria-label="Continue on your phone"
+                className="rounded-lg border border-[#dbe3ed] bg-[#fbfcfe] p-4 text-center"
+              >
+                <p className="flex items-center justify-center gap-2 text-sm font-semibold">
+                  <Smartphone size={16} />
+                  Continue on your phone
+                </p>
+                {handoffLink && (
+                  <>
+                    <div className="mx-auto mt-3 w-fit rounded-xl bg-white p-2">
+                      <QRCodeSVG
+                        value={handoffLink.url}
+                        size={152}
+                        level="M"
+                        title="QR code to continue this route on your phone"
+                        data-handoff-url={handoffLink.url}
+                      />
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-[#718398]">
+                      Scan with your phone camera to get this checklist of{" "}
+                      {queue.length} {queue.length === 1 ? "stop" : "stops"}.
+                      Valid until {handoffLink.expiresAt}.
+                    </p>
+                  </>
+                )}
+              </section>
+            </div>
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            {active ? (
+              <button
+                onClick={() => setQueueOpen(false)}
+                className="flex items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white"
+              >
+                Follow on this kiosk
+                <ArrowRight size={16} />
+              </button>
+            ) : (
+              queue.length > 0 && (
+                <button
+                  onClick={navigate}
+                  className="flex items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white"
+                >
+                  <Navigation size={16} />
+                  Navigate
+                </button>
+              )
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       {keyboard && (
         <div className="fixed bottom-4 left-1/2 z-50 w-[min(92vw,760px)] -translate-x-1/2 rounded-2xl border bg-[#eef3f7] p-4 shadow-2xl">
           <div className="mb-3 flex justify-between">
@@ -347,5 +527,23 @@ export function KioskPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function QueueButton({
+  count,
+  onClick,
+}: {
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex shrink-0 items-center gap-2 rounded-lg border border-[#17365d] px-4 py-3 text-sm font-bold"
+    >
+      <ListOrdered size={16} />
+      Queue ({count})
+    </button>
   );
 }

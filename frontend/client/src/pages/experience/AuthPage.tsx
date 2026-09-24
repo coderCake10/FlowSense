@@ -1,32 +1,147 @@
 /* Civic Signal: visitor-facing experiences use edge anchored wayfinding, AUF navy, signal gold route cues, and clear state transitions. */
-import { useEffect, useState } from "react";
-import { Link } from "wouter";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Bluetooth,
-  Check,
-  ChevronRight,
-  LocateFixed,
-  MapPin,
-  Menu,
-  QrCode,
-  Search,
-  ShieldCheck,
-  Smartphone,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { AlertCircle, ArrowRight, Mail, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { BrandMark, StatusPill } from "@/components/FlowSenseShell";
-import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { BrandMark } from "@/components/FlowSenseShell";
+import { ApiError, apiClient, endpointMap, isApiConfigured } from "@/lib/api";
+import {
+  INSTITUTION_DOMAIN,
+  OTP_LENGTH,
+  normalizeEmail,
+  sanitizeCode,
+  validateCode,
+  validateEmail,
+} from "@/lib/authValidation";
+
+type Step = "email" | "code";
+
+const SERVICE_UNAVAILABLE =
+  "The sign-in service is not connected. Contact the FlowSense system administrator.";
+
+/** Maps an API failure to a message that never reveals whether an account exists. */
+function describeFailure(error: unknown, step: Step) {
+  if (error instanceof ApiError) {
+    if (error.status === 429)
+      return "Too many attempts. Wait a few minutes, then try again.";
+    if (step === "code" && [400, 401, 403].includes(error.status))
+      return "That code is incorrect or has expired. Check your email or request a new code.";
+    if (error.status === 400) return "Check the email address and try again.";
+  }
+  return "We couldn't reach the sign-in service. Check your connection and try again.";
+}
+
+/** The emailed login link: /auth?email=…&token=… (backend tasks.py). */
+function readSignInLink() {
+  const params = new URLSearchParams(window.location.search);
+  const email = params.get("email");
+  const token = params.get("token");
+  return email && token ? { email, token } : null;
+}
 
 export function AuthPage() {
-  const [mode, setMode] = useState<"email" | "code">("email");
-  const [sent, setSent] = useState(false);
+  const [link] = useState(readSignInLink);
+  const [step, setStep] = useState<Step>("email");
+  const [email, setEmail] = useState(link?.email ?? "");
+  const [code, setCode] = useState("");
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pending, setPending] = useState(Boolean(link));
+
+  // Sign in straight from the emailed link, once. The token is removed from
+  // the address bar first so it doesn't stay in browser history.
+  useEffect(() => {
+    if (!link) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    const verifyLink = async () => {
+      if (!isApiConfigured()) {
+        setFormError(SERVICE_UNAVAILABLE);
+        setPending(false);
+        return;
+      }
+      try {
+        await apiClient.post(endpointMap.auth.verify, {
+          email: normalizeEmail(link.email),
+          token: link.token,
+        });
+        window.location.assign("/");
+      } catch (error) {
+        setFormError(
+          error instanceof ApiError && error.status === 429
+            ? describeFailure(error, "code")
+            : "This sign-in link is invalid, already used, or expired. Request a new code below."
+        );
+        setPending(false);
+      }
+    };
+    void verifyLink();
+  }, [link]);
+
+  const requestCode = async () => {
+    const problem = validateEmail(email);
+    setFieldError(problem);
+    setFormError(null);
+    if (problem) return;
+    if (!isApiConfigured()) {
+      setFormError(SERVICE_UNAVAILABLE);
+      return;
+    }
+    setPending(true);
+    try {
+      await apiClient.post(endpointMap.auth.login, {
+        email: normalizeEmail(email),
+      });
+      setCode("");
+      if (step === "code")
+        toast.success("A new code was sent if the account exists.");
+      setStep("code");
+    } catch (error) {
+      setFormError(describeFailure(error, "email"));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const verifyCode = async () => {
+    const problem = validateCode(code);
+    setFieldError(problem);
+    setFormError(null);
+    if (problem) return;
+    if (!isApiConfigured()) {
+      setFormError(SERVICE_UNAVAILABLE);
+      return;
+    }
+    setPending(true);
+    try {
+      await apiClient.post(endpointMap.auth.verify, {
+        email: normalizeEmail(email),
+        token: code,
+      });
+      window.location.assign("/");
+    } catch (error) {
+      setFormError(describeFailure(error, "code"));
+      setPending(false);
+    }
+  };
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (pending) return;
+    void (step === "email" ? requestCode() : verifyCode());
+  };
+
+  const useAnotherEmail = () => {
+    setStep("email");
+    setCode("");
+    setFieldError(null);
+    setFormError(null);
+  };
+
+  const fieldId = step === "email" ? "auth-email" : "auth-code";
+  const errorId = `${fieldId}-error`;
+
   return (
     <div className="grid min-h-screen bg-[#f6f8fb] lg:grid-cols-[0.85fr_1.15fr]">
       <div className="relative hidden overflow-hidden bg-[#0b1f3a] p-10 lg:block">
@@ -72,77 +187,108 @@ export function AuthPage() {
               Log in to access Admin Dashboard
             </h2>
             <p className="mt-3 text-sm leading-6 text-[#718398]">
-              Use your institutional email to receive a one time sign in method.
+              {step === "email"
+                ? `Enter your @${INSTITUTION_DOMAIN} email to receive a one-time sign-in code.`
+                : `If an administrator account exists for ${normalizeEmail(email)}, a ${OTP_LENGTH}-digit code was sent to it. The code expires in 10 minutes.`}
             </p>
           </div>
-          {sent ? (
-            <div className="rounded-2xl border border-[#d8ebdf] bg-[#f2fbf6] p-6">
-              <div className="grid size-11 place-items-center rounded-xl bg-[#dff5e9] text-[#168051]">
-                <Check size={22} />
-              </div>
-              <h3 className="mt-5 font-display text-xl font-bold text-[#17365d]">
-                Check your inbox
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-[#718398]">
-                A secure {mode === "email" ? "login link" : "verification code"}{" "}
-                was sent to your institutional email. This demo state is ready
-                to connect to{" "}
-                <code className="rounded bg-white px-1.5 py-0.5 text-xs">
-                  POST /auth/{mode === "email" ? "login" : "verify"}
-                </code>
-                .
-              </p>
-              <Button
-                variant="outline"
-                className="mt-6 border-[#cfe3d8] text-[#168051]"
-                onClick={() => setSent(false)}
+          <form noValidate onSubmit={submit} className="space-y-5">
+            {formError && (
+              <div
+                role="alert"
+                className="flex gap-3 rounded-xl border border-[#f1d4d3] bg-[#fff6f6] p-4 text-sm leading-6 text-[#9f2f2b]"
               >
-                Use another email
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              <label className="block text-sm font-semibold text-[#40556d]">
+                <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                <p>{formError}</p>
+              </div>
+            )}
+            {step === "email" ? (
+              <label
+                htmlFor={fieldId}
+                className="block text-sm font-semibold text-[#40556d]"
+              >
                 Email address
                 <Input
-                  placeholder="admin@auf.edu.ph"
+                  id={fieldId}
                   type="email"
+                  autoComplete="email"
+                  autoFocus
+                  placeholder={`admin@${INSTITUTION_DOMAIN}`}
+                  value={email}
+                  onChange={e => {
+                    setEmail(e.target.value);
+                    setFieldError(null);
+                  }}
+                  aria-invalid={Boolean(fieldError)}
+                  aria-describedby={fieldError ? errorId : undefined}
                   className="mt-2 h-12 border-[#dbe3ed] bg-white"
                 />
               </label>
-              {mode === "email" ? (
-                <Button
-                  className="h-12 w-full bg-[#17365d] text-white hover:bg-[#102c4d]"
-                  onClick={() => setSent(true)}
-                >
-                  Request login link <ArrowRight size={16} className="ml-2" />
-                </Button>
-              ) : (
-                <label className="block text-sm font-semibold text-[#40556d]">
-                  Authentication code
-                  <Input
-                    placeholder="Enter the code from your email"
-                    inputMode="numeric"
-                    className="mt-2 h-12 border-[#dbe3ed] bg-white"
-                  />
-                  <Button
-                    className="mt-4 h-12 w-full bg-[#17365d] text-white hover:bg-[#102c4d]"
-                    onClick={() => setSent(true)}
-                  >
-                    Submit code <ArrowRight size={16} className="ml-2" />
-                  </Button>
-                </label>
-              )}
-              <button
-                className="flex w-full items-center justify-center gap-2 text-xs font-medium text-[#b08412] hover:text-[#8a6500]"
-                onClick={() => setMode(mode === "email" ? "code" : "email")}
+            ) : (
+              <label
+                htmlFor={fieldId}
+                className="block text-sm font-semibold text-[#40556d]"
               >
-                {mode === "email"
-                  ? "Having trouble? Send code instead"
-                  : "Use email login link instead"}
-              </button>
-            </div>
-          )}
+                Authentication code
+                <Input
+                  id={fieldId}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  maxLength={OTP_LENGTH}
+                  placeholder={"0".repeat(OTP_LENGTH)}
+                  value={code}
+                  onChange={e => {
+                    setCode(sanitizeCode(e.target.value));
+                    setFieldError(null);
+                  }}
+                  aria-invalid={Boolean(fieldError)}
+                  aria-describedby={fieldError ? errorId : undefined}
+                  className="mt-2 h-12 border-[#dbe3ed] bg-white tracking-[0.4em]"
+                />
+              </label>
+            )}
+            {fieldError && (
+              <p id={errorId} className="-mt-3 text-xs text-[#b13a36]">
+                {fieldError}
+              </p>
+            )}
+            <Button
+              type="submit"
+              disabled={pending}
+              className="h-12 w-full bg-[#17365d] text-white hover:bg-[#102c4d]"
+            >
+              {pending
+                ? step === "email"
+                  ? "Sending code…"
+                  : "Verifying…"
+                : step === "email"
+                  ? "Send sign-in code"
+                  : "Verify and sign in"}
+              {!pending && <ArrowRight size={16} className="ml-2" />}
+            </Button>
+            {step === "code" && (
+              <div className="flex items-center justify-between text-xs font-medium">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={useAnotherEmail}
+                  className="text-[#718398] hover:text-[#17365d]"
+                >
+                  Use another email
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void requestCode()}
+                  className="flex items-center gap-1.5 text-[#b08412] hover:text-[#8a6500]"
+                >
+                  <Mail size={13} />
+                  Send a new code
+                </button>
+              </div>
+            )}
+          </form>
           <p className="mt-10 text-center text-xs text-[#96a4b3]">
             FlowSense admin access is limited to authorized AUF administrators.
           </p>
@@ -151,36 +297,3 @@ export function AuthPage() {
     </div>
   );
 }
-
-const destinations = [
-  {
-    name: "Guidance Office",
-    code: "EA-101",
-    building: "EYA Building",
-    floor: "First floor",
-  },
-  {
-    name: "Registrar Office",
-    code: "EA-106",
-    building: "EYA Building",
-    floor: "First floor",
-  },
-  {
-    name: "Lecture Hall 201",
-    code: "EA-201",
-    building: "EYA Building",
-    floor: "Second floor",
-  },
-  {
-    name: "Student Lounge",
-    code: "PS-001",
-    building: "PS Building",
-    floor: "Ground floor",
-  },
-  {
-    name: "Student Lounge",
-    code: "PS-101",
-    building: "PS Building",
-    floor: "First floor",
-  },
-];

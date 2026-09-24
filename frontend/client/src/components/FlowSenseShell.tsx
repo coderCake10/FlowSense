@@ -21,14 +21,27 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
+  AdminMe,
   AdminProfile,
+  ApiError,
   apiClient,
   endpointMap,
   isApiConfigured,
+  toAdminProfile,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -137,25 +150,52 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [profile, setProfile] = useState<AdminProfile>({
     name: "Admin Admin",
     email: "admin@auf.edu.ph",
     role: "Super Admin",
   });
+  // Route guard (QA-18): with an API configured, every admin page first
+  // confirms the session via /auth/me (which also loads the profile). No
+  // API configured means the offline demo, which keeps the placeholder.
+  const [session, setSession] = useState<"checking" | "ready" | "offline">(
+    isApiConfigured() ? "checking" : "ready"
+  );
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    if (!profileModalOpen || !isApiConfigured()) return;
+    if (!isApiConfigured()) return;
+    let cancelled = false;
     apiClient
-      .get<AdminProfile>(endpointMap.auth.me)
-      .then(setProfile)
-      .catch(() => undefined);
-  }, [profileModalOpen]);
+      .get<AdminMe>(endpointMap.auth.me)
+      .then(me => {
+        if (cancelled) return;
+        setProfile(toAdminProfile(me));
+        setSession("ready");
+      })
+      .catch(error => {
+        if (cancelled) return;
+        if (
+          error instanceof ApiError &&
+          (error.status === 401 || error.status === 403)
+        )
+          window.location.assign("/auth");
+        else setSession("offline");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+  const initials =
+    profile.name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(part => part[0]?.toUpperCase())
+      .join("") || "?";
   const signOut = async () => {
-    if (
-      !window.confirm(
-        "Sign out of the FlowSense Admin Dashboard? You will return to the authentication screen."
-      )
-    )
-      return;
+    setSigningOut(true);
     if (isApiConfigured()) {
       try {
         await apiClient.post(endpointMap.auth.logout);
@@ -167,6 +207,36 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   };
   const active = (href: string) =>
     href === "/" ? location === "/" : location.startsWith(href);
+  if (session !== "ready")
+    return (
+      <div
+        role={session === "offline" ? "alert" : "status"}
+        className="grid min-h-screen place-items-center bg-[#f7f9fc] p-6 text-center text-[#102c4d]"
+      >
+        {session === "checking" ? (
+          <p className="text-sm text-[#718398]">Checking your session…</p>
+        ) : (
+          <div className="max-w-sm">
+            <p className="font-display text-xl font-bold">
+              Can't reach the FlowSense server
+            </p>
+            <p className="mt-2 text-sm leading-6 text-[#718398]">
+              Check your connection or ask the system administrator whether the
+              backend is running.
+            </p>
+            <Button
+              className="mt-5 bg-[#17365d] text-white hover:bg-[#102c4d]"
+              onClick={() => {
+                setSession("checking");
+                setAttempt(value => value + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
+      </div>
+    );
   return (
     <div className="min-h-screen bg-[#f7f9fc] text-[#102c4d]">
       <aside
@@ -231,15 +301,15 @@ export function AdminLayout({ children }: { children: ReactNode }) {
             >
               <Avatar className="size-8 border border-white/15">
                 <AvatarFallback className="bg-[#f4c542] text-xs font-bold text-[#0b1f3a]">
-                  AA
+                  {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-white">
-                  Admin Admin
+                  {profile.name}
                 </p>
                 <p className="truncate text-[11px] text-white/45">
-                  admin@auf.edu.ph
+                  {profile.email}
                 </p>
               </div>
               <ChevronDown
@@ -253,7 +323,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
             {profileOpen && (
               <div className="absolute bottom-14 left-0 right-0 z-50 rounded-xl border border-white/15 bg-[#102d50] p-2 shadow-2xl">
                 <p className="px-3 py-2 text-[10px] uppercase tracking-[.14em] text-white/45">
-                  Signed in as Super Admin
+                  Signed in as {profile.role}
                 </p>
                 <button
                   onClick={() => {
@@ -265,7 +335,10 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                   View profile
                 </button>
                 <button
-                  onClick={signOut}
+                  onClick={() => {
+                    setProfileOpen(false);
+                    setSignOutOpen(true);
+                  }}
                   className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#f4c542] hover:bg-white/10"
                 >
                   Sign out
@@ -275,6 +348,38 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
+      <AlertDialog
+        open={signOutOpen}
+        onOpenChange={next => {
+          if (!signingOut) setSignOutOpen(next);
+        }}
+      >
+        <AlertDialogContent className="bg-white text-[#102c4d]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign out of FlowSense?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your admin session will end and you will return to the sign-in
+              screen. Unsaved changes on this page will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={signingOut}>
+              Stay signed in
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={signingOut}
+              onClick={event => {
+                // Keep the dialog open while the logout request is in flight.
+                event.preventDefault();
+                void signOut();
+              }}
+              className="bg-[#17365d] text-white hover:bg-[#102c4d]"
+            >
+              {signingOut ? "Signing out…" : "Sign out"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="lg:pl-[244px]">
         <header className="sticky top-0 z-30 flex h-[68px] items-center justify-between border-b border-[#dbe3ed]/90 bg-[#f7f9fc]/90 px-5 backdrop-blur-md lg:px-9">
           <button
@@ -300,12 +405,12 @@ export function AdminLayout({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-2">
               <Avatar className="size-8">
                 <AvatarFallback className="bg-[#dce6f2] text-xs font-bold text-[#17365d]">
-                  AA
+                  {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden text-right sm:block">
-                <p className="text-xs font-semibold">Admin Admin</p>
-                <p className="text-[10px] text-[#7b8b9d]">Super Admin</p>
+                <p className="text-xs font-semibold">{profile.name}</p>
+                <p className="text-[10px] text-[#7b8b9d]">{profile.role}</p>
               </div>
             </div>
           </div>

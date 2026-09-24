@@ -36,9 +36,21 @@ export default defineConfig([
     },
   },
   {
-    files: ["vite.config.ts", "server/**/*.ts", "shared/**/*.ts"],
+    files: [
+      "vite.config.ts",
+      "server/**/*.ts",
+      "shared/**/*.ts",
+      "scripts/**/*.mjs",
+    ],
     languageOptions: {
       globals: globals.node,
+    },
+  },
+  {
+    // Playwright QA scripts run in Node but pass callbacks into the page.
+    files: ["e2e/**/*.mjs"],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
     },
   },
 ]);

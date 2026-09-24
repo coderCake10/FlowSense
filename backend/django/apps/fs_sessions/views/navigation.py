@@ -8,6 +8,7 @@ NavigationSessionCancelView
 NavigationDestinationReachView
 '''
 
+from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -27,6 +28,10 @@ class NavigationSessionCreateView(APIView):
     POST /api/v1/sessions/navigation
     Initializes a new navigation session for a route or multi-destination queue[cite: 1, 4].
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = NavigationSessionCreateSerializer(data=request.data)
         if serializer.is_valid():
@@ -55,6 +60,10 @@ class NavigationSessionDetailView(APIView):
     GET /api/v1/sessions/navigation/{id}
     Retrieves the current status, instructions, and checklist of an active navigation session[cite: 1, 4].
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def get(self, request, pk):
         session = get_object_or_404(NavigationSession, pk=pk)
         aggregated_data = services.aggregate_session_status(session)
@@ -67,6 +76,10 @@ class NavigationSessionPauseView(APIView):
     POST /api/v1/sessions/navigation/{id}/pause
     Pauses an active navigation session[cite: 1, 4].
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def post(self, request, pk):
         session = get_object_or_404(NavigationSession, pk=pk)
         try:
@@ -82,6 +95,10 @@ class NavigationSessionResumeView(APIView):
     POST /api/v1/sessions/navigation/{id}/resume
     Resumes a previously paused navigation session[cite: 1, 4].
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def post(self, request, pk):
         session = get_object_or_404(NavigationSession, pk=pk)
         try:
@@ -97,6 +114,10 @@ class NavigationSessionCompleteView(APIView):
     POST /api/v1/sessions/navigation/{id}/complete
     Marks a navigation session as successfully concluded[cite: 1, 4].
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def post(self, request, pk):
         session = get_object_or_404(NavigationSession, pk=pk)
         try:
@@ -112,6 +133,10 @@ class NavigationSessionCancelView(APIView):
     POST /api/v1/sessions/navigation/{id}/cancel
     Aborts a navigation session entirely[cite: 1, 4].
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def post(self, request, pk):
         session = get_object_or_404(NavigationSession, pk=pk)
         try:
@@ -127,6 +152,10 @@ class NavigationDestinationReachView(APIView):
     POST /api/v1/sessions/{id}/destinations/{destination_id}/reach
     Triggers a dynamic update confirming that a specific destination in the checklist has been reached[cite: 1, 4].
     """
+    # Public: visitors' kiosks and phones call these without an admin
+    # session. Kiosk device authentication is planned (QA-28).
+    permission_classes = [AllowAny]
+
     def post(self, request, pk, destination_id):
         session = get_object_or_404(NavigationSession, pk=pk)
         try:

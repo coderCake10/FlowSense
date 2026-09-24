@@ -31,6 +31,7 @@ dashboard counts),
 system (status/health summaries).
 """
 from django.contrib.gis.db import models
+from common.db import choice_check
 
 
 class Area(models.Model):
@@ -65,6 +66,9 @@ class Area(models.Model):
 
     class Meta:
         db_table = '"campus"."areas"'
+        constraints = [
+            choice_check("chk_areas_area_type", "area_type", ['campus', 'building', 'outdoor', 'connector']),
+        ]
         indexes = [
             models.Index(fields=["parent_area"], name="idx_areas_parent"),
             # GiST index on `geometry` is created automatically by GeoDjango
@@ -141,6 +145,7 @@ class Room(models.Model):
         db_table = '"campus"."rooms"'
         constraints = [
             models.UniqueConstraint(fields=["floor", "room_code"], name="uq_room_code_per_floor"),
+            choice_check("chk_rooms_room_type", "room_type", ['room', 'office', 'laboratory', 'facility', 'service', 'restroom', 'hall', 'other']),
         ]
         # NOTE: `idx_rooms_search` is a GIN index over
         # to_tsvector('simple', room_code || ' ' || room_alias || ' ' || description)
@@ -318,6 +323,9 @@ class Node(models.Model):
 
     class Meta:
         db_table = '"navigation"."nodes"'
+        constraints = [
+            choice_check("chk_nodes_node_type", "node_type", ['room', 'auxiliary', 'kiosk', 'sensor', 'area_entrance']),
+        ]
         indexes = [
             models.Index(fields=["floor"], name="idx_navigation_nodes_floor"),
             models.Index(fields=["node_type"], name="idx_navigation_nodes_type"),
@@ -367,6 +375,7 @@ class Edge(models.Model):
                 condition=~models.Q(from_node=models.F("to_node")),
                 name="chk_edge_nodes_different",
             ),
+            choice_check("chk_edges_direction", "direction", ['bidirectional', 'forward', 'reverse']),
         ]
 
     def __str__(self):
@@ -410,6 +419,9 @@ class FloorTransition(models.Model):
 
     class Meta:
         db_table = '"navigation"."floor_transitions"'
+        constraints = [
+            choice_check("chk_floor_transitions_transition_type", "transition_type", ['stairs', 'elevator', 'escalator', 'other']),
+        ]
 
     def __str__(self):
         return f"{self.transition_type}: {self.from_node_id} -> {self.to_node_id}"

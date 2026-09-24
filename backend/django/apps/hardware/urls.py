@@ -3,6 +3,6 @@ from rest_framework.routers import DefaultRouter
 from hardware.views import DeviceViewSet
 
 router = DefaultRouter()
-router.register("device", DeviceViewSet, basename='device')
+router.register("devices", DeviceViewSet, basename="device")
 
 urlpatterns = router.urls
