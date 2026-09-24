@@ -13,6 +13,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # Bootstrap namespaces before creating schema-qualified tables.
+        # Keep schemas on rollback: they may contain independently managed data.
+        migrations.RunSQL('CREATE SCHEMA IF NOT EXISTS "campus"', migrations.RunSQL.noop),
+        migrations.RunSQL('CREATE SCHEMA IF NOT EXISTS "navigation"', migrations.RunSQL.noop),
         migrations.CreateModel(
             name='Personnel',
             fields=[

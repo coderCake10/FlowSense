@@ -14,6 +14,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunSQL('CREATE SCHEMA IF NOT EXISTS "analytics"', migrations.RunSQL.noop),
+        # Search services use TrigramSimilarity in addition to full-text search.
+        migrations.RunSQL('CREATE EXTENSION IF NOT EXISTS pg_trgm', migrations.RunSQL.noop),
         migrations.CreateModel(
             name='SearchEvent',
             fields=[

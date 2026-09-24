@@ -16,6 +16,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunSQL('CREATE SCHEMA IF NOT EXISTS "analytics"', migrations.RunSQL.noop),
+        migrations.RunSQL('CREATE SCHEMA IF NOT EXISTS "operations"', migrations.RunSQL.noop),
         migrations.CreateModel(
             name='NavigationRequest',
             fields=[

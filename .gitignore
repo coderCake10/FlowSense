@@ -45,3 +45,10 @@ dist-ssr/
 *.njsproj
 *.sln
 *.sw?
+
+# Local Codex-generated project notes
+/DEMO_BLOCKERS.md
+/LOCAL_SETUP.md
+/backend/HANDOVER.md
+
+/backend/mosquitto/data/

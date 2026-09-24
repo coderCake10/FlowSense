@@ -5,7 +5,7 @@ from rest_framework import serializers
 
 from hardware.models import Kiosk
 
-from device import DeviceDetailSerializer
+from .device import DeviceDetailSerializer
 
 class KioskDetailSerializer(DeviceDetailSerializer):
     """

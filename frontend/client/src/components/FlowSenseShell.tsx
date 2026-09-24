@@ -42,15 +42,13 @@ const navItems = [
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <div className={cn("flex items-center gap-3", compact && "gap-2")}>
-      <div
-        aria-label="FlowSense Great Dane wayfinding mark"
-        className="relative grid size-10 place-items-center overflow-hidden rounded-xl bg-[#f4c542] shadow-[0_8px_18px_rgba(244,197,66,0.22)] ring-1 ring-[#f4c542]/30"
-      >
-        <div className="relative h-5 w-6 -rotate-12 rounded-[55%_45%_45%_55%] border-[3px] border-[#0b1f3a]">
-          <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full border-2 border-[#0b1f3a] bg-[#f4c542]" />
-          <span className="absolute -bottom-1 right-0 h-1.5 w-4 rotate-[-12deg] rounded-full bg-[#0b1f3a]" />
-        </div>
-      </div>
+      <img
+        src="/img/logo.png"
+        alt="FlowSense logo"
+        width={40}
+        height={40}
+        className="size-10 shrink-0 object-contain"
+      />
       {!compact && (
         <div>
           <p className="font-display text-base font-bold tracking-[-0.03em] text-white">
