@@ -1,0 +1,7 @@
+dist
+node_modules
+.git
+*.min.js
+*.min.css
+# Vendored Draco decoder (copied from three)
+client/public/draco
