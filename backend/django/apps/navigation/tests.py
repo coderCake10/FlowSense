@@ -106,7 +106,7 @@ class KioskRoutingTests(TestCase):
         # Stored (x, -z, y): the route starts at the kiosk's model position.
         self.assertEqual(coordinates[0], [0.0, -28.5, 1.02])
         self.assertEqual(coordinates[-1], [5.65, 11.85, 1.02])
-        # The kiosk's hand-placed EA-110 route: 5.15 + 40.35 + 0.5 = 46 m.
+        # The kiosk's hand-placed EA-110 route: 4.5 + 40.35 + 1.15 = 46 m.
         self.assertAlmostEqual(float(route["route_distance"]), 46.0, places=2)
         self.assertEqual(NavigationRequest.objects.count(), 1)
 

@@ -123,13 +123,16 @@ ENTRANCES = [
 # loaded as a navigation graph so routing works before the floor is annotated
 # in Map Annotation (python manage.py seed_eya_routes).
 DEMO_KIOSK = {"name": "EYA lobby kiosk", "position": (0, 1.02, 28.5)}
-# Corridor junctions: (key, position)
+# Corridor junctions: (key, position). The east walkway runs between the
+# columns (x 3.46) and the east wall (inner face 5.89, fire extinguishers
+# to 5.73), through the east turnstile lane (x 4.01-4.83): x = 4.5 keeps
+# the route in the middle of both, clear of the wall.
 DEMO_JUNCTIONS = [
     ("west-lobby", (-4.6, 1.02, 28.5)),
     ("west-101", (-4.6, 1.02, 31.75)),
-    ("east-lobby", (5.15, 1.02, 28.5)),
-    ("east-111", (5.15, 1.02, 1.98)),
-    ("east-110", (5.15, 1.02, -11.85)),
+    ("east-lobby", (4.5, 1.02, 28.5)),
+    ("east-111", (4.5, 1.02, 1.98)),
+    ("east-110", (4.5, 1.02, -11.85)),
 ]
 # Room doors: (room code, position on the corridor side of the door)
 DEMO_ROOM_DOORS = [

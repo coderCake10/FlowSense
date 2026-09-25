@@ -17,8 +17,11 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/FlowSenseShell";
 import {
+  Field,
   NativeSelect,
   QueryStatus,
   SectionLabel,
@@ -34,7 +37,10 @@ import {
   useBuildingAreas,
   useGraph,
   useGraphEdits,
+  useRoomDetails,
+  useRoomEdit,
   type GraphNode,
+  type RoomDetails,
   type NodeType,
   type TransitionType,
 } from "@/lib/annotationApi";
@@ -115,6 +121,104 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** Number, name and purpose of one room, saved to the Annotation API. */
+function RoomDetailsForm({
+  areaId,
+  roomId,
+}: {
+  areaId: number;
+  roomId: number;
+}) {
+  const room = useRoomDetails(roomId);
+  if (room.isLoading) return <p className="text-xs text-[#718398]">Loading…</p>;
+  if (!room.data)
+    return (
+      <p className="text-xs text-[#b42318]">
+        This room couldn't be loaded.{" "}
+        <button className="underline" onClick={() => room.refetch()}>
+          Try again
+        </button>
+      </p>
+    );
+  // Keyed on the saved values, so the form resets after a save.
+  const saved = room.data;
+  return (
+    <RoomFields
+      key={`${saved.id}:${saved.room_code}:${saved.room_alias}:${saved.description}`}
+      areaId={areaId}
+      room={saved}
+    />
+  );
+}
+
+function RoomFields({ areaId, room }: { areaId: number; room: RoomDetails }) {
+  const edit = useRoomEdit(areaId);
+  const unnamed = room.room_alias === `Room ${room.room_code}`;
+  const [code, setCode] = useState(room.room_code);
+  const [alias, setAlias] = useState(unnamed ? "" : room.room_alias);
+  const [purpose, setPurpose] = useState(room.description ?? "");
+  const changed =
+    code.trim() !== room.room_code ||
+    alias.trim() !== (unnamed ? "" : room.room_alias) ||
+    purpose.trim() !== (room.description ?? "");
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={e => {
+        e.preventDefault();
+        edit.mutate({
+          id: room.id,
+          room_code: code.trim(),
+          room_alias: alias.trim(),
+          description: purpose.trim(),
+        });
+      }}
+    >
+      <Field label="Room number">
+        <Input
+          required
+          maxLength={100}
+          value={code}
+          onChange={e => setCode(e.target.value)}
+          className="h-8 border-[#dbe3ed] text-xs"
+        />
+      </Field>
+      <Field
+        label="Name (optional)"
+        hint={`Shown on the kiosk. Left blank, the room is called "Room ${code.trim() || room.room_code}".`}
+      >
+        <Input
+          maxLength={255}
+          value={alias}
+          onChange={e => setAlias(e.target.value)}
+          placeholder="e.g. Office of the Dean"
+          className="h-8 border-[#dbe3ed] text-xs"
+        />
+      </Field>
+      <Field
+        label="Purpose (optional)"
+        hint="What is usually done here. Visitors can search for it."
+      >
+        <Textarea
+          rows={3}
+          value={purpose}
+          onChange={e => setPurpose(e.target.value)}
+          placeholder="e.g. Enrollment advising and student concerns"
+          className="border-[#dbe3ed] text-xs"
+        />
+      </Field>
+      <Button
+        type="submit"
+        size="sm"
+        disabled={!changed || !code.trim() || edit.isPending}
+        className="w-full bg-[#17365d] text-white hover:bg-[#102c4d]"
+      >
+        {edit.isPending ? "Saving…" : "Save room details"}
+      </Button>
+    </form>
+  );
+}
+
 export function MapAnnotation() {
   const live = isApiConfigured();
   const areas = useBuildingAreas();
@@ -178,6 +282,8 @@ export function MapAnnotation() {
         .includes(roomFilter.toLowerCase())
     );
   const selected = selectedId !== null ? (byId.get(selectedId) ?? null) : null;
+  // The room being placed, or the room whose door point is selected.
+  const detailsRoomId = roomToPlace ?? selected?.room ?? null;
   const busy = Object.values(edits).some(edit => edit.isPending);
 
   const chooseTool = (next: Tool) => {
@@ -528,6 +634,20 @@ export function MapAnnotation() {
                         );
                       })}
                     </ul>
+                  </Panel>
+                  <Panel title="Room details">
+                    {detailsRoomId !== null ? (
+                      <RoomDetailsForm
+                        key={detailsRoomId}
+                        areaId={area.id}
+                        roomId={detailsRoomId}
+                      />
+                    ) : (
+                      <p className="text-xs text-[#718398]">
+                        Pick a room above, or click a room's door point, to edit
+                        its number, name and purpose.
+                      </p>
+                    )}
                   </Panel>
                   <Panel title="Selected point">
                     {selected ? (

@@ -24,6 +24,9 @@ export interface HandoffPayload {
   /** Labels (code, name, floor) for destinations the phone can't look up in
    * the building registry: rooms from the kiosk's live directory. */
   r?: Record<string, [string, string, string]>;
+  /** Navigation API route ids by destination id, for stops the kiosk
+   * routed; the phone loads them with GET /navigation/routes/{id}. */
+  t?: Record<string, number>;
   /** Issued-at and expiry, in epoch seconds. */
   iat: number;
   exp: number;
@@ -48,9 +51,11 @@ export function createHandoff(
 ): HandoffPayload {
   const iat = Math.floor(issuedAtMs / 1000);
   const labels: NonNullable<HandoffPayload["r"]> = {};
+  const routes: NonNullable<HandoffPayload["t"]> = {};
   for (const item of queue) {
     if (!building.destinations.some(known => known.id === item.id))
       labels[item.id] = [item.code, item.name, item.floor];
+    if (item.routeId) routes[item.id] = item.routeId;
   }
   return {
     v: PAYLOAD_VERSION,
@@ -58,6 +63,7 @@ export function createHandoff(
     b: building.id,
     d: queue.map(item => item.id),
     ...(Object.keys(labels).length ? { r: labels } : {}),
+    ...(Object.keys(routes).length ? { t: routes } : {}),
     iat,
     exp: iat + HANDOFF_TTL_SECONDS,
   };
@@ -106,6 +112,12 @@ export function decodeHandoff(token: string): HandoffPayload | null {
               label.length === 3 &&
               label.every(part => typeof part === "string")
           ))) &&
+      (data.t === undefined ||
+        (typeof data.t === "object" &&
+          data.t !== null &&
+          Object.values(data.t).every(
+            id => Number.isInteger(id) && (id as number) > 0
+          ))) &&
       Number.isInteger(data.iat) &&
       Number.isInteger(data.exp) &&
       (data.exp as number) > (data.iat as number);
@@ -139,19 +151,26 @@ export function resolveHandoff(
   const building = registry.find(item => item.id === payload.b);
   if (!building) return { status: "invalid" };
   const destinations = payload.d.map((id): Destination | undefined => {
+    const routeId = payload.t?.[id];
     const known = building.destinations.find(item => item.id === id);
-    if (known) return known;
+    if (known) return routeId ? { ...known, routeId } : known;
     const label = payload.r?.[id];
     if (!label) return undefined;
     const [code, name, floor] = label;
+    // Same fallback as the kiosk: a room with a built-in route keeps its
+    // sketch; any other room has no points and the phone says so.
+    const builtIn = building.destinations.find(
+      item => item.code === code && item.points.length >= 2
+    );
     return {
       id,
       code,
       name,
       floor,
-      color: "#2563EB",
-      points: [],
+      color: builtIn?.color ?? "#2563EB",
+      points: builtIn?.points ?? [],
       building: building.name,
+      ...(routeId ? { routeId } : {}),
     };
   });
   if (destinations.some(item => !item)) return { status: "invalid" };

@@ -169,7 +169,51 @@ check(
     (await waitForStat("Connections", connections)) &&
     (await page.getByRole("button", { name: "EA-305 not placed" }).isVisible())
 );
-check("A8", "No uncaught page errors", errors.length === 0, errors[0]);
+// Room details: rename a room and give it a purpose, then put it back.
+await page.getByRole("button", { name: "EA-306 not placed" }).click();
+const name = page.getByLabel("Name (optional)");
+const purpose = page.getByLabel("Purpose (optional)");
+await name.waitFor({ timeout: 15000 });
+const [nameBefore, purposeBefore] = [
+  await name.inputValue(),
+  await purpose.inputValue(),
+];
+await name.fill("QA Computer Lab");
+await purpose.fill("Programming classes and thesis consultations");
+await page.getByRole("button", { name: "Save room details" }).click();
+const renamed = await page
+  .getByRole("button", { name: "EA-306 not placed" })
+  .getByText("QA Computer Lab")
+  .waitFor({ timeout: 15000 })
+  .then(
+    () => true,
+    () => false
+  );
+check(
+  "A8",
+  "Room details save: the new name shows in the room list",
+  renamed &&
+    (await purpose.inputValue()) ===
+      "Programming classes and thesis consultations"
+);
+await page.screenshot({ path: `${OUT}/step8b-room-details.png` });
+await name.fill(nameBefore);
+await purpose.fill(purposeBefore);
+await page.getByRole("button", { name: "Save room details" }).click();
+check(
+  "A9",
+  "Clearing the name falls back to the room number",
+  await page
+    .getByRole("button", { name: "EA-306 not placed" })
+    .getByText(nameBefore || "Room EA-306", { exact: true })
+    .waitFor({ timeout: 15000 })
+    .then(
+      () => true,
+      () => false
+    )
+);
+await page.getByRole("button", { name: "Select", exact: true }).click();
+check("A10", "No uncaught page errors", errors.length === 0, errors[0]);
 
 await browser.close();
 const failed = results.filter(r => !r.pass).length;

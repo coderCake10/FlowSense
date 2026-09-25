@@ -59,7 +59,9 @@ class Command(BaseCommand):
             )
             tally(created)
             for code, alias, room_type, label in eya.ROOMS[order]:
-                _, created = Room.objects.update_or_create(
+                # Only adds missing rooms: names and descriptions edited in
+                # Map Annotation are kept when the seed runs again.
+                _, created = Room.objects.get_or_create(
                     floor=floor,
                     room_code=code,
                     defaults={
@@ -82,7 +84,7 @@ class Command(BaseCommand):
         rooms = Room.objects.filter(floor__area=building).count()
         self.stdout.write(
             self.style.SUCCESS(
-                f"EYA Building seeded: {counts['created']} created, {counts['updated']} updated "
+                f"EYA Building seeded: {counts['created']} created, {counts['updated']} already there "
                 f"({len(eya.FLOORS)} floors, {rooms} rooms)."
             )
         )

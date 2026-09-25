@@ -116,9 +116,10 @@ check(
     })
     .isVisible()
 );
+// Direct children only: the current stop also lists its directions.
 const stops = mobile
   .getByRole("list", { name: "Your stops" })
-  .getByRole("listitem");
+  .locator(":scope > li");
 check(
   "M2",
   "Checklist lists both stops in queue order",
@@ -146,7 +147,9 @@ check(
 check(
   "M5",
   "Honest note: sensor arrival detection not active yet",
-  await mobile.getByText(/isn't active yet, so confirm each stop/).isVisible()
+  await mobile
+    .getByText(/Sensor arrival detection isn't available on phones yet/)
+    .isVisible()
 );
 await mobile.screenshot({
   path: `${OUT}/step2-phone-checklist.png`,
@@ -160,7 +163,9 @@ check(
   "M6",
   "'I've arrived' opens the arrival confirmation",
   await confirm
-    .getByText("Arrived at Office of the Dean (College of Computer Studies)?")
+    .getByText(
+      "Have you reached Office of the Dean (College of Computer Studies)?"
+    )
     .isVisible()
 );
 await confirm.getByRole("button", { name: "Not yet" }).click();
@@ -175,7 +180,7 @@ check(
 );
 await sticky.click();
 await confirm.waitFor();
-await confirm.getByRole("button", { name: "Yes, I'm here" }).click();
+await confirm.getByRole("button", { name: "Yes, continue" }).click();
 await confirm.waitFor({ state: "detached" });
 check(
   "M8",
@@ -195,7 +200,7 @@ check(
   await mobile.getByText("1 of 2 reached").isVisible()
 );
 await mobile.getByRole("button", { name: /I've arrived/ }).click();
-await confirm.getByRole("button", { name: "Yes, I'm here" }).click();
+await confirm.getByRole("button", { name: "Yes, finish" }).click();
 await confirm.waitFor({ state: "detached" });
 check(
   "M10",

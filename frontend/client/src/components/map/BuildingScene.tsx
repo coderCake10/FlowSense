@@ -109,6 +109,26 @@ const CAMERA_DISTANCE = 150;
 const FRAME_FILL = 0.86;
 const UP = new Vector3(0, 1, 0);
 
+/** How steeply an open floor is viewed (degrees above the horizon). The
+ * building view's angle (about 45°) lets a 2.6 m wall hide the 2.4 m
+ * corridor behind it; from 62° a wall hides about 1.4 m, so corridors and
+ * routes stay visible without cutting the model. */
+const FLOOR_VIEW_ELEVATION = 62;
+
+/** `direction` turned to `degrees` above the horizon, keeping its heading. */
+function withElevation(direction: Vector3, degrees: number) {
+  const flat = new Vector3(direction.x, 0, direction.z);
+  if (flat.lengthSq() < 1e-9) flat.set(1, 0, 0);
+  const angle = (degrees * Math.PI) / 180;
+  return flat
+    .normalize()
+    .multiplyScalar(Math.cos(angle))
+    .add(new Vector3(0, Math.sin(angle), 0));
+}
+
+const elevationOf = (direction: Vector3) =>
+  (Math.asin(Math.min(1, Math.max(-1, direction.y))) * 180) / Math.PI;
+
 function viewDirection(building: BuildingConfig) {
   const [px, py, pz] = building.camera.position;
   const [tx, ty, tz] = building.camera.target;
@@ -180,8 +200,19 @@ export function CameraRig({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- by value
     [building, direction?.[0], direction?.[1], direction?.[2]]
   );
+  // Open floors are seen more steeply, unless a direction is given.
+  const floorView = view.mode === "floor" && !direction;
+  const viewDefault = useMemo(
+    () =>
+      floorView
+        ? withElevation(defaultDirection, FLOOR_VIEW_ELEVATION)
+        : defaultDirection,
+    [floorView, defaultDirection]
+  );
   const rig = useRef({
-    direction: defaultDirection.clone(),
+    direction: viewDefault.clone(),
+    fromDirection: new Vector3(),
+    goalDirection: viewDefault.clone(),
     target: new Vector3(),
     goalTarget: new Vector3(),
     goalZoom: 1,
@@ -206,11 +237,14 @@ export function CameraRig({
       r.lastDefault !== defaultDirection
     ) {
       r.lastDefault = defaultDirection;
-      r.direction.copy(defaultDirection);
+      r.goalDirection.copy(viewDefault);
       r.lastReset = resetKey;
     } else if (controls) {
-      // Keep the direction the visitor turned to.
+      // Keep the heading the visitor turned to, at this view's angle.
       r.direction.copy(camera.position).sub(controls.target).normalize();
+      r.goalDirection.copy(
+        withElevation(r.direction, elevationOf(viewDefault))
+      );
     }
     // A floor view frames that floor and the ones below it (they stay shown).
     const box = prepared.buildingBox.clone();
@@ -223,23 +257,22 @@ export function CameraRig({
       }
       if (box.isEmpty()) box.copy(prepared.buildingBox);
     }
-    const goal = frame(box, r.direction, size.width, size.height);
+    const goal = frame(box, r.goalDirection, size.width, size.height);
     r.goalTarget.copy(goal.center);
     r.goalZoom = goal.zoom;
     if (controls) {
       const whole = frame(
         prepared.buildingBox,
-        r.direction,
+        r.goalDirection,
         size.width,
         size.height
       ).zoom;
-      const polar = Math.acos(Math.min(1, Math.max(-1, defaultDirection.y)));
       controls.minZoom = whole * 0.5;
       controls.maxZoom = whole * 10;
-      controls.minPolarAngle = polar;
-      controls.maxPolarAngle = polar;
     }
     if (!r.placed) {
+      r.direction.copy(r.goalDirection);
+      lockTilt(controls, r.direction);
       r.target.copy(goal.center);
       camera.zoom = goal.zoom;
       r.placed = true;
@@ -248,7 +281,10 @@ export function CameraRig({
     } else {
       if (controls) r.target.copy(controls.target);
       r.fromTarget.copy(r.target);
+      r.fromDirection.copy(r.direction);
       r.fromZoom = camera.zoom;
+      // Free the tilt while turning to the new angle; locked again after.
+      lockTilt(controls, null);
       r.start = performance.now();
       r.moving = true;
     }
@@ -263,6 +299,7 @@ export function CameraRig({
     size.width,
     size.height,
     defaultDirection,
+    viewDefault,
   ]);
 
   useFrame((state, delta) => {
@@ -274,8 +311,18 @@ export function CameraRig({
     if (r.moving) {
       const t = Math.min(1, (performance.now() - r.start) / ANIMATION_MS);
       r.target.lerpVectors(r.fromTarget, r.goalTarget, ease(t));
+      r.direction
+        .lerpVectors(r.fromDirection, r.goalDirection, ease(t))
+        .normalize();
       camera.zoom = r.fromZoom + (r.goalZoom - r.fromZoom) * ease(t);
-      if (t === 1) r.moving = false;
+      if (t === 1) {
+        // Land exactly on the goal, then lock the tilt there.
+        r.moving = false;
+        r.direction.copy(r.goalDirection);
+        placeCamera(camera, controls, r.target, r.direction);
+        lockTilt(controls, r.direction);
+        state.invalidate();
+      }
     }
     if (r.moving || spin) {
       placeCamera(camera, controls, r.target, r.direction);
@@ -283,6 +330,16 @@ export function CameraRig({
     }
   });
   return null;
+}
+
+/** Lock the camera's tilt to `direction` (null: free while turning). */
+function lockTilt(controls: Controls | null, direction: Vector3 | null) {
+  if (!controls) return;
+  const polar = direction
+    ? Math.acos(Math.min(1, Math.max(-1, direction.y)))
+    : null;
+  controls.minPolarAngle = polar ?? 0;
+  controls.maxPolarAngle = polar ?? Math.PI / 2;
 }
 
 function placeCamera(

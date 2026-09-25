@@ -20,6 +20,9 @@ export interface Destination {
   /** The route split by floor (Navigation API routes can change floors).
    * Without it, `points` is one leg on `modelFloor`. */
   legs?: RouteLeg[];
+  /** The Navigation API route (`GET /navigation/routes/{id}`), so the phone
+   * handoff can load the same route without requesting a new one. */
+  routeId?: number;
 }
 
 export interface RouteLeg {

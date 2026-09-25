@@ -221,3 +221,52 @@ export function useGraphEdits(areaId: number | null) {
   );
   return { addNode, removeNode, connect, disconnect, linkFloors, unlinkFloors };
 }
+
+export interface RoomDetails {
+  id: number;
+  floor: number;
+  room_code: string;
+  room_alias: string;
+  description: string | null;
+}
+export interface RoomChanges {
+  room_code: string;
+  /** Blank: the server names the room "Room <code>". */
+  room_alias: string;
+  /** What the room is for; blank clears it. */
+  description: string;
+}
+
+const roomKey = (roomId: number | null) => ["annotation-room", roomId] as const;
+
+/** One room's editable details (the room list leaves out descriptions). */
+export function useRoomDetails(roomId: number | null) {
+  return useQuery({
+    queryKey: roomKey(roomId),
+    enabled: isApiConfigured() && roomId !== null,
+    queryFn: () =>
+      apiClient.get<RoomDetails>(endpointMap.map.room(String(roomId))),
+  });
+}
+
+/** Saves a room's number, name and purpose. Door points follow a new number,
+ * and the kiosk picks the changes up the next time it loads its directory. */
+export function useRoomEdit(areaId: number | null) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...changes }: RoomChanges & { id: number }) =>
+      apiClient.patch<RoomDetails>(
+        endpointMap.annotation.room(String(id)),
+        changes
+      ),
+    onSuccess: (_saved, { id }) => {
+      toast.success("Room details saved.");
+      void client.invalidateQueries({ queryKey: roomKey(id) });
+      void client.invalidateQueries({ queryKey: roomsKey(areaId) });
+      void client.invalidateQueries({ queryKey: graphKey(areaId) });
+      void client.invalidateQueries({ queryKey: ["kiosk-directory"] });
+    },
+    onError: error =>
+      toast.error(describeApiError(error, "The room couldn't be saved.")),
+  });
+}

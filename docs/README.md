@@ -9,6 +9,7 @@
 | Changes | [changes/step-01-kiosk-auth-signout.md](changes/step-01-kiosk-auth-signout.md) | Step 1 change record: what changed, why, and backend handoff |
 | Changes | [changes/step-02-qr-handoff.md](changes/step-02-qr-handoff.md) | Step 2 change record: QR handoff and mobile checklist |
 | QA | [qa/step-02-test-report.md](qa/step-02-test-report.md) | Step 2 test plan, results, and how to re-run them |
+| Setup | [setup/team-local-setup.md](setup/team-local-setup.md) | **Start here (groupmates):** full Windows + Docker setup, first sign-in, HeidiSQL, devices, troubleshooting |
 | Setup | [setup/local-development.md](setup/local-development.md) | Running backend and frontend without Docker, and running the tests |
 | Changes | [changes/step-04a-platform-and-auth.md](changes/step-04a-platform-and-auth.md) | Step 4a: API layout, security defaults, sign-in |
 | QA | [qa/step-04a-test-report.md](qa/step-04a-test-report.md) | Step 4a test report |
@@ -35,6 +36,10 @@
 | QA | [qa/step-08a-test-report.md](qa/step-08a-test-report.md) | Step 8a test report |
 | Changes | [changes/step-08b-map-annotation.md](changes/step-08b-map-annotation.md) | Step 8b: Map Annotation on the real model; GeoJSON input fix; multi-floor routes |
 | QA | [qa/step-08b-test-report.md](qa/step-08b-test-report.md) | Step 8b test report |
+| Changes | [changes/step-08c-room-details.md](changes/step-08c-room-details.md) | Step 8c: edit a room's number, name and purpose in Map Annotation |
+| QA | [qa/step-08c-test-report.md](qa/step-08c-test-report.md) | Step 8c test report |
+| Changes | [changes/step-08d-mobile-directions.md](changes/step-08d-mobile-directions.md) | Step 8d: phone handoff with the kiosk's route, step-by-step directions, loading page (team wireframe) |
+| QA | [qa/step-08d-test-report.md](qa/step-08d-test-report.md) | Step 8d test report |
 | Setup | [setup/map-annotation.md](setup/map-annotation.md) | How to annotate a floor |
 | API | [openapi/flowsense-openapi.yaml](openapi/flowsense-openapi.yaml) | OpenAPI contract (served by Swagger UI at `/docs/`) |
 

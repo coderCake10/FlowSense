@@ -81,6 +81,13 @@ def log_annotation_change(*, actor, action: str, instance) -> AuditEvent:
 # --------------------------------------------------------------------------
 
 
+def rename_room_nodes(room, old_code: str) -> None:
+    """A room's door nodes are named "<code> door"; follow a new room code."""
+    Node.objects.filter(room=room, name=f"{old_code} door").update(
+        name=f"{room.room_code} door"
+    )
+
+
 def get_scene(*, area_id: Optional[int] = None, floor_id: Optional[int] = None) -> dict:
     """
     GET /annotations. Scopes every one of the seven querysets to the given

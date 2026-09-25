@@ -1102,7 +1102,11 @@ paths:
     patch:
       tags: [Annotation]
       summary: Update room annotation metadata
-      description: Updates metadata for a room node, such as changing the Room Code, Alias, Description, or Image.
+      description: >-
+        Updates metadata for a room node, such as changing the Room Code, Alias, Description, or Image.
+        The room code is trimmed and must be unique on its floor (400 otherwise). A blank alias is stored
+        as "Room <room_code>"; a blank description is stored as null. When the room code changes, the
+        room's door nodes named "<old code> door" are renamed to match. Admin only.
       parameters:
         - $ref: "#/components/parameters/IdPath"
       requestBody:

@@ -33,7 +33,10 @@ class RoomAnnotationViewSet(mixins.UpdateModelMixin, GenericViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        old_code = instance.room_code
         room = serializer.save()
+        if room.room_code != old_code:
+            services.rename_room_nodes(room, old_code)
         services.log_annotation_change(
             actor=request.admin_user, action=AuditEvent.ACTION_UPDATE, instance=room
         )

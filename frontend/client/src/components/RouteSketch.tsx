@@ -11,6 +11,13 @@ export function RouteSketch({
   building: BuildingConfig;
   destination: Destination;
 }) {
+  if (destination.points.length < 2)
+    return (
+      <p className="rounded-xl border border-[#dbe3ed] bg-[#f7f9fc] p-4 text-xs leading-5 text-[#52657a]">
+        There's no route sketch for {destination.code} yet. Head to the{" "}
+        {destination.floor.toLowerCase()} and follow the room signs.
+      </p>
+    );
   const framePoints = [
     building.start,
     ...building.destinations.flatMap(item => item.points),

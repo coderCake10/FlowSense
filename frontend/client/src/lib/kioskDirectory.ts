@@ -35,6 +35,7 @@ interface ApiSearchResult {
   room?: ApiRoom;
 }
 interface ApiRoute {
+  id: number;
   segments: { geometry: { coordinates: number[][] } }[];
 }
 
@@ -164,6 +165,26 @@ export async function fetchRoute(
     origin_node_id: originNodeId,
     destination_node_ids: [destination.nodeId],
   });
+  return asRoute(building, route, destination);
+}
+
+/** A route the kiosk already requested (read only; not logged again). */
+export async function fetchSavedRoute(
+  building: BuildingConfig,
+  routeId: number,
+  destination: Destination
+): Promise<Destination | null> {
+  const route = await apiClient.get<ApiRoute>(
+    endpointMap.navigation.route(String(routeId))
+  );
+  return asRoute(building, route, destination);
+}
+
+function asRoute(
+  building: BuildingConfig,
+  route: ApiRoute,
+  destination: Destination
+): Destination | null {
   const points = route.segments.flatMap((segment, index) =>
     segment.geometry.coordinates
       .slice(index === 0 ? 0 : 1)
@@ -174,5 +195,6 @@ export async function fetchRoute(
     ...destination,
     points,
     legs: splitByFloor(building.model.floors, points),
+    routeId: route.id,
   };
 }

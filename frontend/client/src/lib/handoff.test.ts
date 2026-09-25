@@ -149,6 +149,61 @@ describe("resolveHandoff", () => {
     expect(result.session.destinations[1].id).toBe("a");
   });
 
+  it("gives a live room the built-in route with the same room code", () => {
+    const live = createHandoff(
+      building,
+      [{ ...stop("x"), id: "room-7", code: "A", points: [] }],
+      NOW,
+      "s3"
+    );
+    const result = resolveHandoff(encodeHandoff(live), registry, NOW);
+    if (result.status !== "ok") throw new Error(result.status);
+    expect(result.session.destinations[0].id).toBe("room-7");
+    expect(result.session.destinations[0].points).toEqual(
+      building.destinations[0].points
+    );
+  });
+
+  it("leaves a live room without a built-in route with no points", () => {
+    const live = createHandoff(
+      building,
+      [{ ...stop("x"), id: "room-8", code: "EA-305" }],
+      NOW,
+      "s4"
+    );
+    const result = resolveHandoff(encodeHandoff(live), registry, NOW);
+    if (result.status !== "ok") throw new Error(result.status);
+    expect(result.session.destinations[0].points).toEqual([]);
+  });
+
+  it("carries the kiosk's route ids so the phone can load the same routes", () => {
+    const routed = { ...building.destinations[0], routeId: 42 };
+    const live = createHandoff(
+      building,
+      [routed, building.destinations[1]],
+      NOW,
+      "s5"
+    );
+    expect(live.t).toEqual({ a: 42 });
+    const result = resolveHandoff(encodeHandoff(live), registry, NOW);
+    if (result.status !== "ok") throw new Error(result.status);
+    expect(result.session.destinations.map(d => d.routeId)).toEqual([
+      42,
+      undefined,
+    ]);
+    expect(
+      createHandoff(building, [building.destinations[1]], NOW, "s6").t
+    ).toBeUndefined();
+  });
+
+  it("rejects malformed route ids", () => {
+    for (const t of [{ a: "7" }, { a: 1.5 }, { a: 0 }]) {
+      expect(
+        decodeHandoff(encodeHandoff({ ...payload, t } as never))
+      ).toBeNull();
+    }
+  });
+
   it("rejects malformed room labels", () => {
     const bad = { ...payload, d: ["room-1"], r: { "room-1": ["EA-1"] } };
     expect(decodeHandoff(encodeHandoff(bad as never))).toBeNull();

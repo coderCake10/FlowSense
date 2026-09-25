@@ -150,3 +150,75 @@ class AnnotationApiTests(TestCase):
             for c in segment["geometry"]["coordinates"]
         }
         self.assertEqual(heights, {1.02, 8.09})
+
+
+class RoomDetailsTests(TestCase):
+    """Editing a room's number, name and purpose (PATCH /annotations/rooms/{id})."""
+
+    def setUp(self):
+        call_command("seed_campus", stdout=StringIO())
+        self.room = Room.objects.get(room_code="EA-110")
+
+    def edit(self, room, **body):
+        return self.client.patch(
+            f"{API}/annotations/rooms/{room.id}/", body, content_type="application/json"
+        )
+
+    def test_editing_needs_an_admin(self):
+        self.assertIn(self.edit(self.room, room_alias="X").status_code, (401, 403))
+
+    def test_admin_edits_number_name_and_purpose(self):
+        sign_in_as_admin(self.client)
+        door = Node.objects.create(
+            floor=self.room.floor,
+            room=self.room,
+            name="EA-110 door",
+            node_type=Node.TYPE_ROOM,
+            geometry=model_to_point(0, 1, 0),
+        )
+        response = self.edit(
+            self.room,
+            room_code=" EA-110X ",
+            room_alias="CCS Dean's Office",
+            description="  Enrollment advising and student concerns ",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.room.refresh_from_db()
+        self.assertEqual(self.room.room_code, "EA-110X")
+        self.assertEqual(self.room.room_alias, "CCS Dean's Office")
+        self.assertEqual(self.room.description, "Enrollment advising and student concerns")
+        door.refresh_from_db()
+        self.assertEqual(door.name, "EA-110X door")
+        detail = data(self.client.get(f"{API}/map/rooms/{self.room.id}/"))
+        self.assertEqual(detail["description"], "Enrollment advising and student concerns")
+
+    def test_alias_and_purpose_are_optional(self):
+        sign_in_as_admin(self.client)
+        response = self.edit(self.room, room_alias="  ", description="")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.room.refresh_from_db()
+        self.assertEqual(self.room.room_alias, "Room EA-110")
+        self.assertIsNone(self.room.description)
+
+    def test_an_unnamed_room_keeps_following_its_number(self):
+        sign_in_as_admin(self.client)
+        room = Room.objects.get(room_code="EA-305")
+        self.assertEqual(room.room_alias, "Room EA-305")
+        self.assertEqual(self.edit(room, room_code="EA-305A").status_code, 200)
+        room.refresh_from_db()
+        self.assertEqual(room.room_alias, "Room EA-305A")
+
+    def test_room_number_must_be_unique_on_the_floor_and_not_blank(self):
+        sign_in_as_admin(self.client)
+        self.assertEqual(self.edit(self.room, room_code="EA-111").status_code, 400)
+        self.assertEqual(self.edit(self.room, room_code="  ").status_code, 400)
+        self.room.refresh_from_db()
+        self.assertEqual(self.room.room_code, "EA-110")
+
+    def test_seeding_again_keeps_edited_details(self):
+        sign_in_as_admin(self.client)
+        self.edit(self.room, room_alias="CCS Dean's Office", description="Advising")
+        call_command("seed_campus", stdout=StringIO())
+        self.room.refresh_from_db()
+        self.assertEqual(self.room.room_alias, "CCS Dean's Office")
+        self.assertEqual(self.room.description, "Advising")

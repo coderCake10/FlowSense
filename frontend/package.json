@@ -21,6 +21,7 @@
     "qa:step7b": "node e2e/step7b.qa.mjs",
     "qa:step8a": "node e2e/step8a.qa.mjs",
     "qa:step8b": "node e2e/step8b.qa.mjs",
+    "qa:step8d": "node e2e/step8d.qa.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write ."

@@ -31,8 +31,8 @@ export const destinations: Destination[] = [
     color: "#2563EB",
     points: [
       START,
-      [5.15, 1.02, 28.5],
-      [5.15, 1.02, -11.85],
+      [4.5, 1.02, 28.5],
+      [4.5, 1.02, -11.85],
       [5.65, 1.02, -11.85],
     ],
   },
@@ -42,7 +42,7 @@ export const destinations: Destination[] = [
     code: "EA-111",
     door: "DOOR_.007",
     color: "#2563EB",
-    points: [START, [5.15, 1.02, 28.5], [5.15, 1.02, 1.98], [5.65, 1.02, 1.98]],
+    points: [START, [4.5, 1.02, 28.5], [4.5, 1.02, 1.98], [5.65, 1.02, 1.98]],
   },
 ].map(d => ({
   ...d,

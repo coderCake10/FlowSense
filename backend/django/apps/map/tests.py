@@ -66,7 +66,7 @@ class SeedCampusTests(TestCase):
     def test_is_idempotent_and_preserves_annotations(self):
         self.seed()
         Room.objects.filter(room_code="EA-613").update(image_path="/media/rooms/613.jpg")
-        self.assertIn("0 created, 102 updated", self.seed())
+        self.assertIn("0 created, 102 already there", self.seed())
         self.assertEqual(Room.objects.count(), 92)
         self.assertEqual(Room.objects.get(room_code="EA-613").image_path, "/media/rooms/613.jpg")
 

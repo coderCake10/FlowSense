@@ -46,6 +46,24 @@ When a room shows a green tick, the kiosk can route to it (if the network
 connects it to the kiosk). *This building* counts the points, connections,
 floor links, and placed rooms.
 
+## Room details
+
+The **Room details** panel (right side, under the room list) edits the room
+you pick in the list, or the room whose door point you click:
+
+| Field | What it is | Notes |
+|---|---|---|
+| Room number | The room code, e.g. EA-110 | Required, and unique on its floor. The door point is renamed to match. |
+| Name (optional) | What the kiosk shows, e.g. "Office of the Dean" | Left blank, the room is called "Room EA-110". |
+| Purpose (optional) | What is usually done in the room | Kiosk search finds rooms by these words too. |
+
+Click **Save room details**. Changes are kept when `seed_campus` runs again.
+
+Renumbering a room has side effects:
+- The kiosk's built-in demo route for that room stops matching it.
+- `seed_eya_routes` stops matching it.
+- Re-running `seed_campus` adds the old number back as a new, unplaced room.
+
 ## Which kiosk point a kiosk uses
 
 A kiosk device uses the node chosen for it on the **Hardware** page
@@ -58,6 +76,16 @@ or the only one in the building.
 routes (kiosk to EA-101A, EA-110 and EA-111). Their points are tagged, so
 re-running the command resets them without touching anything placed here.
 They can be edited or deleted like any other point.
+
+Place corridor points in the **middle of the walkway**, not along a wall.
+The kiosk draws the route on top of everything so it's never hidden, so a
+route beside a wall looks as if it runs on the wall. The starter east
+walkway runs at x = 4.5 m: between the columns (3.46) and the east wall
+(5.89), and through the east turnstile lane.
+
+An open floor is viewed more steeply than the whole building (62° from
+the horizon instead of about 45°), so the walls in front hide less of the
+corridors behind them.
 
 ## Coordinates
 

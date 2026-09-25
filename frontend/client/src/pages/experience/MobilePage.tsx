@@ -1,10 +1,15 @@
 /* Civic Signal: visitor-facing experiences use edge anchored wayfinding, AUF navy, signal gold route cues, and clear state transitions. */
 import { useEffect, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import {
   ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
   Bluetooth,
   Check,
   Clock,
+  CornerUpLeft,
+  CornerUpRight,
   LocateFixed,
   MapPin,
   QrCode,
@@ -28,6 +33,9 @@ import {
   type HandoffResolution,
   type HandoffSession,
 } from "@/lib/handoff";
+import { isApiConfigured } from "@/lib/api";
+import { fetchSavedRoute } from "@/lib/kioskDirectory";
+import { routeSteps, type StepKind } from "@/lib/routeSteps";
 import { cn } from "@/lib/utils";
 
 /* Per-phone progress, keyed by handoff session. Storage can be unavailable
@@ -106,7 +114,7 @@ export function MobilePage() {
     <div className="min-h-screen bg-[#f7f9fc] text-[#102c4d]">
       <MobileHeader />
       {resolution.status === "ok" ? (
-        <Checklist session={resolution.session} />
+        <RoutedChecklist session={resolution.session} />
       ) : (
         <main className="mx-auto max-w-xl px-5 py-16 text-center">
           <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-[#e7eef6] text-[#17365d]">
@@ -123,6 +131,79 @@ export function MobilePage() {
     </div>
   );
 }
+
+/** Loads the routes the kiosk requested for each stop (read only), then
+ * shows the checklist. A route that can't be loaded keeps the stop's
+ * built-in route, or none. */
+function RoutedChecklist({ session }: { session: HandoffSession }) {
+  const routed = isApiConfigured()
+    ? session.destinations.filter(item => item.routeId)
+    : [];
+  const routes = useQueries({
+    queries: routed.map(item => ({
+      queryKey: ["handoff-route", item.routeId],
+      queryFn: () => fetchSavedRoute(session.building, item.routeId!, item),
+      staleTime: Infinity,
+      retry: 1,
+    })),
+  });
+  const loaded = routes.filter(route => !route.isPending).length;
+  if (loaded < routed.length)
+    return <Preparing loaded={loaded} total={routed.length} />;
+  const byId = new Map(
+    routes.flatMap(route => (route.data ? [[route.data.id, route.data]] : []))
+  );
+  return (
+    <Checklist
+      session={{
+        ...session,
+        destinations: session.destinations.map(
+          item => byId.get(item.id) ?? item
+        ),
+      }}
+    />
+  );
+}
+
+function Preparing({ loaded, total }: { loaded: number; total: number }) {
+  const percent = Math.round(((loaded + 1) / (total + 1)) * 100);
+  return (
+    <main className="mx-auto flex min-h-[70vh] max-w-xl flex-col justify-center px-5 py-16">
+      <h1 className="font-display text-3xl font-bold tracking-[-0.06em]">
+        Preparing your route
+      </h1>
+      <p className="mt-3 text-sm leading-6 text-[#718398]">
+        Loading directions for your{" "}
+        {total === 1 ? "destination" : `${total} stops`}.
+      </p>
+      <div
+        className="mt-8 h-2 overflow-hidden rounded-full bg-[#e7eef6]"
+        role="progressbar"
+        aria-label="Loading your route"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+      >
+        <div
+          className="h-full rounded-full bg-[#f4c542] transition-[width] duration-300"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className="mt-2 flex justify-between text-[11px] font-semibold text-[#8a98a9]">
+        <span>Loading route</span>
+        <span>{percent}%</span>
+      </p>
+    </main>
+  );
+}
+
+const STEP_ICONS: Record<StepKind, typeof ArrowUp> = {
+  start: ArrowUp,
+  left: CornerUpLeft,
+  right: CornerUpRight,
+  floor: ArrowUpDown,
+  arrive: MapPin,
+};
 
 function Checklist({ session }: { session: HandoffSession }) {
   const { building, destinations } = session;
@@ -201,6 +282,26 @@ function Checklist({ session }: { session: HandoffSession }) {
         </div>
       </div>
 
+      {!done && (
+        <div
+          role="status"
+          className="mb-6 flex items-center gap-3 rounded-2xl border border-[#dbe3ed] bg-white p-4"
+        >
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#edf2f7] text-[#8a98a9]">
+            <Bluetooth size={16} />
+          </span>
+          <span className="text-xs leading-5">
+            <span className="block font-semibold text-[#17365d]">
+              Confirm each stop yourself
+            </span>
+            <span className="block text-[#718398]">
+              Sensor arrival detection isn't available on phones yet. Tap "I've
+              arrived" when you get there.
+            </span>
+          </span>
+        </div>
+      )}
+
       <ol aria-label="Your stops" className="space-y-3">
         {destinations.map((item, index) => {
           const isDone = reached.includes(item.id);
@@ -249,12 +350,57 @@ function Checklist({ session }: { session: HandoffSession }) {
               {isCurrent && (
                 <div className="mt-4 space-y-3">
                   <RouteSketch building={building} destination={item} />
-                  <p className="flex items-start gap-2 text-xs leading-5 text-[#52657a]">
-                    <MapPin size={14} className="mt-0.5 shrink-0" />
-                    {index === 0
-                      ? `Follow the highlighted path from the ${building.startLabel.toLowerCase()} (dark dot) to ${item.code} (colored dot).`
-                      : `Head to ${item.code} (colored dot). The dark dot marks the ${building.startLabel.toLowerCase()}.`}
-                  </p>
+                  {item.points.length >= 2 && (
+                    <p className="flex items-center gap-2 text-[11px] text-[#718398]">
+                      <span className="size-2.5 rounded-full bg-[#17365d]" />
+                      {building.startLabel}
+                      <span
+                        className="ml-2 size-2.5 rounded-full"
+                        style={{ background: item.color }}
+                      />
+                      {item.code}
+                    </p>
+                  )}
+                  {(() => {
+                    const steps = routeSteps(building, item);
+                    return steps.length ? (
+                      <ol
+                        aria-label={`Directions to ${item.code}`}
+                        className="divide-y divide-[#edf2f7] rounded-xl border border-[#dbe3ed]"
+                      >
+                        {steps.map((step, stepIndex) => {
+                          const Icon = STEP_ICONS[step.kind];
+                          return (
+                            <li
+                              key={stepIndex}
+                              className="flex items-center gap-3 px-3 py-2.5"
+                            >
+                              <span
+                                className={cn(
+                                  "grid size-8 shrink-0 place-items-center rounded-lg",
+                                  step.kind === "arrive"
+                                    ? "bg-[#17365d] text-white"
+                                    : step.kind === "floor"
+                                      ? "bg-[#fdf3d0] text-[#8a6500]"
+                                      : "bg-[#edf2f7] text-[#17365d]"
+                                )}
+                              >
+                                <Icon size={15} />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block text-xs font-semibold text-[#17365d]">
+                                  {step.title}
+                                </span>
+                                <span className="block text-[11px] text-[#718398]">
+                                  {step.detail}
+                                </span>
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    ) : null;
+                  })()}
                   <Button
                     className="h-11 w-full bg-[#17365d] text-white hover:bg-[#102c4d]"
                     onClick={() => setConfirmOpen(true)}
@@ -268,16 +414,6 @@ function Checklist({ session }: { session: HandoffSession }) {
         })}
       </ol>
 
-      {!done && (
-        <div className="mt-6 flex gap-3 rounded-2xl border border-[#dbe3ed] bg-white p-4 text-xs leading-5 text-[#718398]">
-          <Bluetooth size={16} className="mt-0.5 shrink-0 text-[#8a98a9]" />
-          <p>
-            Automatic arrival detection uses FlowSense sensors and your phone's
-            Bluetooth. It isn't active yet, so confirm each stop when you get
-            there.
-          </p>
-        </div>
-      )}
       {done && (
         <p className="mt-6 flex items-center gap-2 text-sm text-[#168051]">
           <Check size={16} />
@@ -310,14 +446,17 @@ function Checklist({ session }: { session: HandoffSession }) {
       >
         <DialogContent className="max-w-sm bg-white text-[#17365d]">
           <DialogHeader>
-            <DialogTitle>Arrived at {stop?.name}?</DialogTitle>
+            <DialogTitle>Have you reached {stop?.name}?</DialogTitle>
             <DialogDescription>
-              {stop?.code} · {stop?.floor}. Confirm to mark this stop as reached
               {current < destinations.length - 1
-                ? " and continue to your next stop."
-                : "."}
+                ? "Confirm to mark this stop as reached and continue to your next stop."
+                : "Confirm to mark your last stop as reached."}
             </DialogDescription>
           </DialogHeader>
+          <p className="flex items-center gap-3 rounded-xl border border-[#dbe3ed] bg-[#f7f9fc] px-4 py-3 text-sm font-semibold">
+            <MapPin size={16} className="shrink-0" />
+            {stop?.code} · {stop?.floor}
+          </p>
           <DialogFooter className="gap-2">
             <Button
               variant="outline"
@@ -333,7 +472,9 @@ function Checklist({ session }: { session: HandoffSession }) {
               className="h-11 bg-[#17365d] text-white hover:bg-[#102c4d]"
               onClick={confirmArrival}
             >
-              Yes, I'm here
+              {current < destinations.length - 1
+                ? "Yes, continue"
+                : "Yes, finish"}
             </Button>
           </DialogFooter>
         </DialogContent>
