@@ -16,10 +16,13 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from map.models import Room, RoomPersonnel
+from map.services import with_room_node
 from map.serializers import RoomDetailSerializer, RoomListSerializer, RoomPersonnelSerializer
+from common.pagination import StandardPagination
 
 
 class RoomViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
+    pagination_class = StandardPagination
     permission_classes = [AllowAny]
 
     def get_queryset(self):
@@ -27,7 +30,7 @@ class RoomViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewS
         # source="floor.area_id" traversal doesn't cost an extra query per
         # row — see the serializer's own note about this being the view's
         # responsibility.
-        queryset = Room.objects.filter(deleted_at__isnull=True).select_related("floor")
+        queryset = with_room_node(Room.objects.filter(deleted_at__isnull=True).select_related("floor"))
 
         floor_id = self.request.query_params.get("floor_id")
         if floor_id:

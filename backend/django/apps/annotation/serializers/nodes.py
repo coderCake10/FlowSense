@@ -79,6 +79,19 @@ class NodeAnnotationCreateSerializer(serializers.ModelSerializer):
     """
 
     geometry = GeoJSONField()
+    # Auxiliary Node Tool connection modes (annotation.services
+    # .connect_auxiliary_node): connect the new node to the previously
+    # placed one ("place_order"), to the nearest node ("nearest_node"), or
+    # not at all (default). Not stored on the node.
+    connection_mode = serializers.ChoiceField(
+        choices=["no_connection", "place_order", "nearest_node"],
+        required=False,
+        default="no_connection",
+        write_only=True,
+    )
+    previous_node_id = serializers.IntegerField(
+        required=False, allow_null=True, write_only=True
+    )
 
     class Meta:
         model = Node
@@ -91,6 +104,8 @@ class NodeAnnotationCreateSerializer(serializers.ModelSerializer):
             "active",
             "navigable",
             "metadata",
+            "connection_mode",
+            "previous_node_id",
         ]
 
     def validate(self, attrs):

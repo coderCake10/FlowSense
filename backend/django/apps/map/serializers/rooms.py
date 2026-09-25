@@ -25,6 +25,9 @@ class RoomListSerializer(serializers.ModelSerializer):
     payload rendered for every room across every building at once.
     """
 
+    # Annotated by map.services.with_room_node(); None when not placed yet.
+    node_id = serializers.IntegerField(read_only=True, allow_null=True, default=None)
+
     class Meta:
         model = Room
         fields = [
@@ -36,6 +39,7 @@ class RoomListSerializer(serializers.ModelSerializer):
             "is_searchable",
             "is_navigable",
             "is_active",
+            "node_id",
         ]
         read_only_fields = fields
 

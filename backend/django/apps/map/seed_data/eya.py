@@ -32,6 +32,17 @@ RENAMED_CODES = {
 
 FLOORS = {1: "First floor", 2: "Second floor", 3: "Third floor", 4: "Fourth floor", 5: "Fifth floor", 6: "Sixth floor"}
 
+# Each floor's group in the 3D model (EYA.glb) and its walking-surface height
+# in metres (top of the floor slab), measured from the model.
+FLOOR_MODEL = {
+    1: ("FLOOR_1", "0.93"),
+    2: ("FLOOR_2", "4.42"),
+    3: ("FLOOR_3", "8.00"),
+    4: ("FLOOR_4", "11.52"),
+    5: ("FLOOR_5", "15.08"),
+    6: ("FLOOR_6", "18.53"),
+}
+
 # (code, alias, room_type, label from the document or None)
 ROOMS = {
     1: [
@@ -106,3 +117,35 @@ ENTRANCES = [
     {"name": "EYA first floor exit near EA-109 (canteen)", "entrance_type": "exit", "is_primary": False},
     {"name": "EYA first floor exit near EA-106", "entrance_type": "exit", "is_primary": False},
 ]
+
+# First-floor routes from the kiosk to three offices, in model coordinates
+# (glTF x, y, z; y up). These are the kiosk's original hand-placed routes,
+# loaded as a navigation graph so routing works before the floor is annotated
+# in Map Annotation (python manage.py seed_eya_routes).
+DEMO_KIOSK = {"name": "EYA lobby kiosk", "position": (0, 1.02, 28.5)}
+# Corridor junctions: (key, position)
+DEMO_JUNCTIONS = [
+    ("west-lobby", (-4.6, 1.02, 28.5)),
+    ("west-101", (-4.6, 1.02, 31.75)),
+    ("east-lobby", (5.15, 1.02, 28.5)),
+    ("east-111", (5.15, 1.02, 1.98)),
+    ("east-110", (5.15, 1.02, -11.85)),
+]
+# Room doors: (room code, position on the corridor side of the door)
+DEMO_ROOM_DOORS = [
+    ("EA-101A", (-5.65, 1.02, 31.75)),
+    ("EA-110", (5.65, 1.02, -11.85)),
+    ("EA-111", (5.65, 1.02, 1.98)),
+]
+# Walkable connections between the points above ("kiosk" is the kiosk node).
+DEMO_EDGES = [
+    ("kiosk", "west-lobby"),
+    ("west-lobby", "west-101"),
+    ("west-101", "EA-101A"),
+    ("kiosk", "east-lobby"),
+    ("east-lobby", "east-111"),
+    ("east-111", "EA-111"),
+    ("east-111", "east-110"),
+    ("east-110", "EA-110"),
+]
+

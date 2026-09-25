@@ -9,6 +9,8 @@ floor order, room code per floor, entrance name) and updated in place.
 Geometry, images, and personnel are left untouched so annotations made in
 the admin are never overwritten.
 """
+from decimal import Decimal
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -49,7 +51,12 @@ class Command(BaseCommand):
                 legacy.update(room_code=new)
 
         for order in eya.FLOORS:
-            floor, created = Floor.objects.update_or_create(area=building, floor_order=order, defaults={})
+            glb_node_name, elevation = eya.FLOOR_MODEL[order]
+            floor, created = Floor.objects.update_or_create(
+                area=building,
+                floor_order=order,
+                defaults={"glb_node_name": glb_node_name, "elevation": Decimal(elevation)},
+            )
             tally(created)
             for code, alias, room_type, label in eya.ROOMS[order]:
                 _, created = Room.objects.update_or_create(

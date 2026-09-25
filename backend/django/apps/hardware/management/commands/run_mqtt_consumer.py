@@ -3,7 +3,9 @@ import logging
 import paho.mqtt.client as mqtt
 from django.core.management.base import BaseCommand
 from django.conf import settings
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from hardware import services
 from hardware.services import discover_device, validate_mqtt_topic
 from hardware.models import Device, SensorObservation
 
@@ -43,20 +45,36 @@ class Command(BaseCommand):
             if not validate_mqtt_topic(topic, payload):
                 return # Silently drop unauthorized or spoofed location data
                 
-            # 4. Write Telemetry (Only if the admin has officially registered the sensor)
-            if device_type == 'sensor' and device.status == Device.STATUS_REGISTERED:
-                # Update hardware health metrics
+            # 4. Decommissioned devices are ignored entirely.
+            if device.status == Device.STATUS_DECOMMISSIONED:
+                return
+
+            # 5. Every accepted message counts as contact: last ping, and
+            #    online again for a registered, enabled device.
+            now = timezone.now()
+            stores_telemetry = device_type == 'sensor' and device.status in services.ACTIVE_STATUSES
+            services.record_contact(device, now, data_received=stores_telemetry)
+
+            # 6. Write telemetry only for registered, enabled sensors
+            #    (unregistered and disabled devices are seen but not stored).
+            if stores_telemetry:
                 sensor = device.sensor
                 sensor.battery_level = payload.get('battery_level')
                 sensor.signal_strength = payload.get('signal_strength')
-                sensor.save(update_fields=['battery_level', 'signal_strength'])
+                sensor.last_transmission_at = now
+                sensor.save(update_fields=['battery_level', 'signal_strength', 'last_transmission_at'])
 
-                # Log the specific crowd traffic analytics
+                # observed_at is the sensor's own timestamp (ISO 8601); a sensor
+                # without clock sync (NTP) may omit it, in which case the
+                # receive time is used.
+                observed_at = parse_datetime(payload['observed_at']) if payload.get('observed_at') else None
                 SensorObservation.objects.create(
                     sensor=sensor,
                     signal_count=payload.get('signal_count'),
                     estimated_density=payload.get('estimated_density'),
-                    observed_at=parse_datetime(payload.get('observed_at'))
+                    battery_level=payload.get('battery_level'),
+                    signal_strength=payload.get('signal_strength'),
+                    observed_at=observed_at or now,
                 )
 
         except json.JSONDecodeError:

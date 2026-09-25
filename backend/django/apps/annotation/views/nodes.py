@@ -56,13 +56,8 @@ class NodeAnnotationViewSet(
         input_serializer.is_valid(raise_exception=True)
         validated = input_serializer.validated_data
 
-        # NOTE: connection_mode/previous_node_id (Auxiliary Node Tool's
-        # Nearest Node / Place Order / No Connection modes) aren't
-        # collected here because NodeAnnotationCreateSerializer doesn't
-        # have those input fields yet — see
-        # services.create_node_with_connection()'s own NOTE. This always
-        # creates with connection_mode="no_connection" until that's wired
-        # up end-to-end.
+        # Auxiliary Node Tool connection modes (Nearest Node / Place Order /
+        # No Connection); services.connect_auxiliary_node() applies them.
         node = services.create_node_with_connection(
             floor=validated["floor"],
             room=validated.get("room"),
@@ -72,6 +67,8 @@ class NodeAnnotationViewSet(
             active=validated.get("active", True),
             navigable=validated.get("navigable", True),
             metadata=validated.get("metadata"),
+            connection_mode=validated.get("connection_mode", "no_connection"),
+            previous_node_id=validated.get("previous_node_id"),
             actor=request.admin_user,
         )
 

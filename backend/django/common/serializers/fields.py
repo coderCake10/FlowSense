@@ -47,9 +47,14 @@ class GeoJSONField(serializers.Field):
         if data in (None, ""):
             return None
         try:
-            geom = GEOSGeometry(data if isinstance(data, str) else json.dumps(data))
+            parsed = json.loads(data) if isinstance(data, str) else data
+            geom = GEOSGeometry(json.dumps(parsed))
         except Exception:
             self.fail("invalid")
-        if geom.srid is None:
+        # GEOS reads GeoJSON as EPSG:4326 (the GeoJSON default), which would
+        # make PostGIS reproject these metre coordinates as if they were
+        # longitude/latitude. Coordinates are in the column's SRID unless
+        # the payload names a CRS explicitly.
+        if not (isinstance(parsed, dict) and parsed.get("crs")):
             geom.srid = self.srid
         return geom

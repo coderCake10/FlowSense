@@ -16,6 +16,7 @@ from rest_framework.throttling import SimpleRateThrottle
 
 from authentication.models import AdminUser
 from common.permissions.admin import ADMIN_SESSION_COOKIE_NAME
+from common.testing import data
 
 API = "/api/v1"
 
@@ -79,9 +80,9 @@ class PasswordlessSignInTests(AuthTestCase):
         self.assertEqual(self.client.get(f"{API}/auth/session").status_code, 200)
         me = self.client.get(f"{API}/auth/me")
         self.assertEqual(me.status_code, 200)
-        self.assertEqual(me.json()["email"], "admin@auf.edu.ph")
+        self.assertEqual(data(me)["email"], "admin@auf.edu.ph")
 
-        self.assertEqual(self.client.post(f"{API}/auth/logout").status_code, 204)
+        self.assertEqual(self.client.post(f"{API}/auth/logout").status_code, 200)  # SuccessNoData envelope
         self.assertEqual(self.client.get(f"{API}/auth/me").status_code, 401)
 
     def test_wrong_code_is_rejected(self):

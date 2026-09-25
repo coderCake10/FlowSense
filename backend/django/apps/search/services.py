@@ -20,6 +20,7 @@ from django.db.models.functions import Greatest
 
 from fs_sessions.models import KioskSession
 from map.models import Personnel, Room
+from map.services import with_room_node
 from search.models import SearchEvent
 
 # --------------------------------------------------------------------------
@@ -61,7 +62,9 @@ def _search_rooms(
     _infer_room_matched_field and execute_search, which read them before
     handing plain dicts to the serializer).
     """
-    queryset = Room.objects.filter(deleted_at__isnull=True, is_searchable=True, is_active=True)
+    queryset = with_room_node(
+        Room.objects.filter(deleted_at__isnull=True, is_searchable=True, is_active=True)
+    )
 
     if area_id is not None:
         queryset = queryset.filter(floor__area_id=area_id)

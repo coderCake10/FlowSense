@@ -1,4 +1,0 @@
-'''
-KioskListView
-KioskDetailView
-'''

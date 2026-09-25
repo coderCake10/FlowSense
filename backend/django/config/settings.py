@@ -68,7 +68,6 @@ INSTALLED_APPS = [
     'assets',
     'authentication',
     'common',
-    'configuration',
     'fs_sessions',
     'hardware',
     'map',
@@ -147,6 +146,8 @@ MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
 # Django REST Framework: admin-only unless a view opts out explicitly
 # (public kiosk/mobile endpoints set AllowAny). See common.permissions.
 REST_FRAMEWORK = {
+    # Every response uses the OpenAPI contract's {success, data, meta} envelope.
+    'DEFAULT_RENDERER_CLASSES': ['common.renderers.EnvelopeJSONRenderer'],
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'common.authentication.AdminSessionCookieAuthentication',
     ],
@@ -157,6 +158,7 @@ REST_FRAMEWORK = {
         'auth_login': os.getenv('THROTTLE_AUTH_LOGIN', '5/min'),
         'auth_verify': os.getenv('THROTTLE_AUTH_VERIFY', '10/min'),
         'auth_verify_email': os.getenv('THROTTLE_AUTH_VERIFY_EMAIL', '10/hour'),
+        'kiosk_heartbeat': os.getenv('THROTTLE_KIOSK_HEARTBEAT', '20/min'),
     },
     'UNAUTHENTICATED_USER': None,
 }
@@ -188,7 +190,9 @@ ADMIN_SESSION_COOKIE_SECURE = env_bool('ADMIN_SESSION_COOKIE_SECURE', True)
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# Local time for "today" in the dashboard and for scheduled tasks. The API
+# still returns ISO 8601 timestamps with their offset.
+TIME_ZONE = os.getenv('DJANGO_TIME_ZONE', 'Asia/Manila')
 
 USE_I18N = True
 
@@ -236,5 +240,17 @@ CELERY_BEAT_SCHEDULE = {
     'cleanup-expired-admin-sessions-daily': {
         'task': 'authentication.cleanup_expired_admin_sessions',
         'schedule': crontab(minute=30, hour=3),
+    },
+    'mark-offline-devices-every-minute': {
+        'task': 'hardware.mark_offline_devices',
+        'schedule': crontab(),
+    },
+    'clear-informational-alerts-every-5-minutes': {
+        'task': 'analytics.clear_expired_informational_alerts',
+        'schedule': crontab(minute='*/5'),
+    },
+    'evaluate-analytics-trends-hourly': {
+        'task': 'analytics.evaluate_trends',
+        'schedule': crontab(minute=45),
     },
 }

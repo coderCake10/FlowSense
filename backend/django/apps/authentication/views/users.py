@@ -29,6 +29,7 @@ from authentication.serializers import (
     AdminUserUpdateSerializer,
 )
 from common.permissions import IsSuperAdminUser
+from common.pagination import StandardPagination
 
 
 class SelfLockoutConflict(APIException):
@@ -51,6 +52,7 @@ class AdminUserViewSet(
     mixins.DestroyModelMixin,
     GenericViewSet,
 ):
+    pagination_class = StandardPagination
     # PATCH only, no PUT — matches the API design (and
     # AdminUserUpdateSerializer's field set, which is already the full
     # editable surface; a PUT-style full replace wouldn't mean anything

@@ -236,12 +236,8 @@ def create_node_with_connection(
     into one call — what the POST /annotations/nodes view actually calls
     for the common "place an auxiliary node with auto-connect" flow.
 
-    NOTE: NodeAnnotationCreateSerializer (see
-    annotation/serializers/nodes.py) does NOT currently have
-    `connection_mode`/`previous_node_id` input fields — those need to be
-    added there before a view can actually collect them from the request.
-    Flagging that gap rather than silently working around it; this
-    function's signature is what that serializer should validate into.
+    NodeAnnotationCreateSerializer collects `connection_mode` and
+    `previous_node_id` from the request and the view passes them here.
     """
     node = create_node(
         floor=floor,

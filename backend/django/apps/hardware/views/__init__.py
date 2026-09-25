@@ -1,5 +1,3 @@
-from hardware.views.device import DeviceViewSet
+from hardware.views.device import DeviceViewSet, KioskViewSet, SensorViewSet
 
-__all__ = [
-    "DeviceViewSet",
-]
+__all__ = ["DeviceViewSet", "KioskViewSet", "SensorViewSet"]

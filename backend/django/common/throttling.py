@@ -38,3 +38,9 @@ class VerifyEmailThrottle(SimpleRateThrottle):
         if not email:
             return None
         return self.cache_format % {"scope": self.scope, "ident": email}
+
+
+class KioskHeartbeatThrottle(_PerIpThrottle):
+    """POST /hardware/kiosks/heartbeat per client IP (a kiosk sends one every 30 s)."""
+
+    scope = "kiosk_heartbeat"

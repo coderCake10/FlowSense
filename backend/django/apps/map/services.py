@@ -9,7 +9,9 @@ Views call these functions; they never build this logic themselves.
 """
 from django.contrib.gis.db.models import Extent
 
-from map.models import Area
+from django.db.models import OuterRef, Subquery
+
+from map.models import Area, Node
 
 DEFAULT_SRID = 3857
 DEFAULT_COORDINATE_UNIT = "meters"
@@ -55,3 +57,16 @@ def get_map_context() -> dict:
         "bounds": bounds,
         "root_areas": root_areas,
     }
+
+
+def with_room_node(rooms):
+    """
+    Annotates each room with `node_id`: the room's navigation node (the
+    point routes end at), or None while the room hasn't been placed in Map
+    Annotation. The kiosk needs it to ask the Navigation API for a route.
+    """
+    room_node = Node.objects.filter(
+        room=OuterRef("pk"), active=True, navigable=True, deleted_at__isnull=True
+    ).order_by("id")
+    return rooms.annotate(node_id=Subquery(room_node.values("id")[:1]))
+

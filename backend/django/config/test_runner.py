@@ -13,7 +13,6 @@ LOCAL_APPS = [
     "assets",
     "authentication",
     "common",
-    "configuration",
     "fs_sessions",
     "hardware",
     "map",

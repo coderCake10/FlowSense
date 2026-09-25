@@ -1,6 +1,0 @@
-'''
-SensorListView
-SensorDetailView
-SensorObservationsView
-SensorStatisticsView
-'''

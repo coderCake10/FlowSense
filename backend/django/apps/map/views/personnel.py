@@ -14,9 +14,11 @@ from rest_framework.viewsets import GenericViewSet
 
 from map.models import Personnel
 from map.serializers import PersonnelSerializer
+from common.pagination import StandardPagination
 
 
 class PersonnelViewSet(mixins.ListModelMixin, GenericViewSet):
+    pagination_class = StandardPagination
     serializer_class = PersonnelSerializer
     permission_classes = [AllowAny]
 

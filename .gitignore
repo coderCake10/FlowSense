@@ -52,3 +52,5 @@ dist-ssr/
 /backend/HANDOVER.md
 
 /backend/mosquitto/data/
+# Celery beat runtime state (rewritten on every run)
+/backend/django/celerybeat-schedule*

@@ -30,4 +30,10 @@ urlpatterns = [
     path('api/v1/annotations/', include('annotation.urls')),
     path('api/v1/sessions/', include('fs_sessions.urls')),
     path('api/v1/hardware/', include('hardware.urls')),
+    path('api/v1/analytics/', include('analytics.urls')),
+    path('api/v1/alerts/', include('analytics.alerts_urls')),
+    path('api/v1/activity/', include('analytics.activity_urls')),
+    # Settings and System APIs live in common (API design: common/settings, common/system).
+    path('api/v1/settings/', include('common.settings.urls')),
+    path('api/v1/system/', include('common.system.urls')),
 ]
