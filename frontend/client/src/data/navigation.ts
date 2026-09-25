@@ -44,6 +44,33 @@ export interface ModelFloor {
   elevation: number;
 }
 
+/** A building shown around the kiosk's building in the campus view. */
+export interface CampusNeighbour {
+  name: string;
+  modelUrl: string;
+  /** Placement in the kiosk building's model coordinates. */
+  position: Point3;
+  /** Turn about the vertical axis (radians). */
+  rotationY: number;
+  /** Where its name label sits. */
+  labelAt: Point3;
+}
+
+/** The low-detail neighbourhood around the kiosk's building. */
+export interface CampusConfig {
+  name: string;
+  /** Surrounding streets, buildings and trees, in the building's
+   * coordinates (scripts/blender/build_campus_model.py). */
+  modelUrl: string;
+  neighbours: CampusNeighbour[];
+  /** Box the campus view frames: [min, max]. */
+  frame: [Point3, Point3];
+  /** Label for the kiosk's own building. */
+  labelAt: Point3;
+  /** Other labelled places, such as the overpass. */
+  landmarks: { name: string; at: Point3 }[];
+}
+
 /** One selectable building map. IDs must be unique in the registry. */
 export interface BuildingConfig {
   id: string;
@@ -78,4 +105,6 @@ export interface BuildingConfig {
     far: number;
   };
   destinations: Destination[];
+  /** The campus around the building, when a campus model exists. */
+  campus?: CampusConfig;
 }

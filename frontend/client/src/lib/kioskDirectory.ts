@@ -168,6 +168,39 @@ export async function fetchRoute(
   return asRoute(building, route, destination);
 }
 
+interface ApiQueueRoute {
+  destinations: { destination_order: number; node: { id: number } }[];
+}
+
+/**
+ * The queue in the order with the shortest total walk from the kiosk (the
+ * Navigation API's `optimize_order`). Stops that aren't on the map yet keep
+ * their order after the others. Null when there is nothing to reorder or no
+ * route could be found (the visitor's order is kept).
+ */
+export async function shortestWalkOrder(
+  originNodeId: number | null | undefined,
+  queue: readonly Destination[]
+): Promise<Destination[] | null> {
+  const mapped = queue.filter(item => item.nodeId);
+  if (!originNodeId || mapped.length < 2) return null;
+  const route = await apiClient.post<ApiQueueRoute>(
+    endpointMap.navigation.routes,
+    {
+      origin_node_id: originNodeId,
+      destination_node_ids: mapped.map(item => item.nodeId),
+      optimize_order: true,
+    }
+  );
+  const byNode = new Map(mapped.map(item => [item.nodeId, item]));
+  const ordered = [...route.destinations]
+    .sort((a, b) => a.destination_order - b.destination_order)
+    .map(stop => byNode.get(stop.node.id))
+    .filter((item): item is Destination => Boolean(item));
+  if (ordered.length !== mapped.length) return null;
+  return [...ordered, ...queue.filter(item => !item.nodeId)];
+}
+
 /** A route the kiosk already requested (read only; not logged again). */
 export async function fetchSavedRoute(
   building: BuildingConfig,

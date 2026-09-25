@@ -110,3 +110,45 @@ class KioskRoutingTests(TestCase):
         self.assertAlmostEqual(float(route["route_distance"]), 46.0, places=2)
         self.assertEqual(NavigationRequest.objects.count(), 1)
 
+
+    def queue_route(self, codes, **extra):
+        origin = self.heartbeat()["map_node_id"]
+        ids = [Node.objects.get(room__room_code=code).id for code in codes]
+        response = self.client.post(
+            f"{API}/navigation/routes",
+            {"origin_node_id": origin, "destination_node_ids": ids, **extra},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        route = data(response)
+        by_node = {node.id: node.room.room_code for node in Node.objects.filter(id__in=ids)}
+        visited = sorted(route["destinations"], key=lambda d: d["destination_order"])
+        return [by_node[d["node"]["id"]] for d in visited], route
+
+    def test_queue_keeps_the_visitors_order_by_default(self):
+        order, _ = self.queue_route(["EA-110", "EA-101A", "EA-111"])
+        self.assertEqual(order, ["EA-110", "EA-101A", "EA-111"])
+
+    def test_queue_can_be_put_in_the_shortest_walking_order(self):
+        kept, kept_route = self.queue_route(["EA-110", "EA-101A", "EA-111"])
+        order, route = self.queue_route(
+            ["EA-110", "EA-101A", "EA-111"], optimize_order=True
+        )
+        # West wing first (EA-101A is by the kiosk), then down the east
+        # corridor: EA-111 before EA-110, which is further along it.
+        self.assertEqual(order, ["EA-101A", "EA-111", "EA-110"])
+        self.assertLess(float(route["route_distance"]), float(kept_route["route_distance"]))
+        self.assertEqual(len(route["segments"]), 3)
+
+    def test_long_queues_use_the_heuristic_and_agree(self):
+        from navigation import services
+
+        original = services.EXACT_ORDER_LIMIT
+        services.EXACT_ORDER_LIMIT = 1
+        try:
+            order, _ = self.queue_route(
+                ["EA-110", "EA-101A", "EA-111"], optimize_order=True
+            )
+        finally:
+            services.EXACT_ORDER_LIMIT = original
+        self.assertEqual(order, ["EA-101A", "EA-111", "EA-110"])

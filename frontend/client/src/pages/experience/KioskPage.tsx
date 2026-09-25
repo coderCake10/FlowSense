@@ -23,7 +23,12 @@ import {
   visitorSessionId,
 } from "@/lib/kioskDevice";
 import { ApiError, isApiConfigured } from "@/lib/api";
-import { fetchRoute, useDirectory, useRoomSearch } from "@/lib/kioskDirectory";
+import {
+  fetchRoute,
+  shortestWalkOrder,
+  useDirectory,
+  useRoomSearch,
+} from "@/lib/kioskDirectory";
 import { buildings } from "@/data/buildings";
 import type { Destination } from "@/data/navigation";
 import {
@@ -64,6 +69,9 @@ export function KioskPage() {
   const [keyboard, setKeyboard] = useState(false);
   const [queue, setQueue] = useState<Destination[]>([]);
   const [queueOpen, setQueueOpen] = useState(false);
+  /** Off: Navigate arranges the stops for the shortest walk. */
+  const [keepOrder, setKeepOrder] = useState(false);
+  const [arranging, setArranging] = useState(false);
   /** Handoff session for the open queue modal; issued when the modal opens. */
   const [handoff, setHandoff] = useState<{
     id: string;
@@ -211,12 +219,27 @@ export function KioskPage() {
     toast.success(`${selected.code} added to your queue`);
   };
   /** Navigate (per the kiosk spec): activate the queue, start the first stop,
-   * and open the queue modal with the stop list and the phone handoff QR. */
-  const navigate = () => {
+   * and open the queue modal with the stop list and the phone handoff QR.
+   * Unless the visitor keeps their order, the stops are first arranged for
+   * the shortest walk (the visitor's order is kept if that fails). */
+  const navigate = async () => {
     const next = activateQueue(queue, selected);
-    if (!next.length) return;
-    setQueue(next);
-    show(next[0], true);
+    if (!next.length || arranging) return;
+    let ordered = next;
+    if (live && !keepOrder && next.length > 1) {
+      setArranging(true);
+      try {
+        ordered = (await shortestWalkOrder(kiosk?.map_node_id, next)) ?? next;
+      } catch {
+        ordered = next;
+      } finally {
+        setArranging(false);
+      }
+      if (ordered.some((item, index) => item.id !== next[index].id))
+        toast.success("Stops arranged for the shortest walk");
+    }
+    setQueue(ordered);
+    show(ordered[0], true);
     showQueue();
   };
   /** Opens the queue modal with a fresh handoff session (new QR, new expiry). */
@@ -464,10 +487,11 @@ export function KioskPage() {
                     <QueueButton count={queue.length} onClick={openQueue} />
                     <button
                       onClick={navigate}
-                      className="flex shrink-0 items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white"
+                      disabled={arranging}
+                      className="flex shrink-0 items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white disabled:opacity-70"
                     >
                       <Navigation size={17} />
-                      Navigate
+                      {arranging ? "Arranging stops…" : "Navigate"}
                     </button>
                   </div>
                 )}
@@ -483,7 +507,9 @@ export function KioskPage() {
             <DialogDescription>
               {active
                 ? "Follow the highlighted route on the map, or scan the code to continue on your phone."
-                : "Stops are visited in order. Press Navigate to start."}
+                : live && !keepOrder && queue.length > 1
+                  ? "Press Navigate to arrange your stops for the shortest walk and start."
+                  : "Stops are visited in this order. Press Navigate to start."}
             </DialogDescription>
           </DialogHeader>
           {queue.length === 0 ? (
@@ -570,7 +596,26 @@ export function KioskPage() {
               </section>
             </div>
           )}
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {live && !active && queue.length > 1 && (
+              <label className="mr-auto flex max-w-sm items-start gap-2 text-xs leading-5 text-[#52657a]">
+                <input
+                  id="keep-order"
+                  type="checkbox"
+                  checked={keepOrder}
+                  onChange={e => setKeepOrder(e.target.checked)}
+                  className="mt-0.5 size-4 accent-[#17365d]"
+                />
+                <span>
+                  <span className="block font-bold text-[#17365d]">
+                    Keep my order
+                  </span>
+                  For stops that must be visited in order, such as enrollment
+                  steps. Otherwise FlowSense arranges them for the shortest
+                  walk.
+                </span>
+              </label>
+            )}
             {active ? (
               <button
                 onClick={() => setQueueOpen(false)}
@@ -583,10 +628,11 @@ export function KioskPage() {
               queue.length > 0 && (
                 <button
                   onClick={navigate}
-                  className="flex items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white"
+                  disabled={arranging}
+                  className="flex items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white disabled:opacity-70"
                 >
                   <Navigation size={16} />
-                  Navigate
+                  {arranging ? "Arranging stops…" : "Navigate"}
                 </button>
               )
             )}

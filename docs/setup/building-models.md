@@ -18,8 +18,16 @@ The list lives in one place, `frontend/client/src/data/models.ts`:
 ```ts
 export const MODEL_FILES = {
   eya: "EYA.glb",
+  aBuilding: "A.glb",
+  campus: "CAMPUS.glb",
 } as const;
 ```
+
+| File | What it is | Size |
+|---|---|---|
+| `EYA.glb` | The EYA Building, with floors, rooms and signs | 16.5 MB |
+| `A.glb` | The A Building. **Preliminary:** exported from a work-in-progress `.blend` (no textures or rooms yet; the third floor has no walls). Re-export it when the team updates the model. | 0.7 MB |
+| `CAMPUS.glb` | The low-detail neighbourhood for the campus view: nearby buildings, trees, ground, and the overpass over MacArthur Highway (section 2b) | 0.05 MB |
 
 The kiosk, the building configurations, and the check script all read this
 list. Each building configuration in `client/src/data/` (for example
@@ -55,6 +63,17 @@ blender -b "/path/to/CAPSTONE EYA.blend" --python scripts/blender/export_kiosk_m
 | `--max-texture` | Largest texture side in pixels. Default 2048. 1024 blurs close-up floor tiles. |
 | `--jpeg-quality` | Default 80 |
 | `--drop NAME` | Leave out an object by exact name. Repeat it for several objects. The EYA file still contains a stray human figure, which is dropped here. |
+| `--drop-collection NAME` | Leave out a collection and everything in it, by exact name. Repeatable. |
+
+The A Building's file keeps working copies next to the building. Export only
+the building:
+
+```bash
+blender -b "/path/to/A BUILDING.blend" --python scripts/blender/export_kiosk_model.py -- \
+    --out client/public/models/A.glb \
+    --drop-collection ROUGH --drop-collection BACKUP \
+    --drop-collection "A BUILDING.001" --drop-collection Collection
+```
 | `--no-draco` | Skip compression. The file will be about 4 times larger. |
 
 Blender 4.2 or later works; the EYA model was exported with Blender 5.2.2 LTS.
@@ -78,6 +97,49 @@ dropped in the folder can't be committed by accident.
 **Repository growth:** git keeps every committed version. Each EYA update adds
 about 16 MB to the history. If the history grows too heavy, the team starts
 a fresh repository from the latest version.
+
+## 2b. The campus model
+
+`scripts/blender/build_campus_model.py` makes `CAMPUS.glb` from the team's
+area export (`LFA_AUF.obj`, a TopoExport OBJ in metres):
+
+```bash
+blender -b --python scripts/blender/build_campus_model.py -- \
+    --obj "/path/to/LFA_AUF.obj" --out client/public/models/CAMPUS.glb
+```
+
+What it does:
+
+- **Moves the area into the EYA model's coordinates,** so the campus lines up
+  with the kiosk's existing map and navigation points. EYA stays at the
+  origin.
+- **Keeps a rectangular tile** around the two buildings (`TILE_X`, `TILE_Y`)
+  and cuts the ground at its edges.
+- **Leaves out two blocks:** `mesh1893` (EYA) and `mesh2312` (A Building),
+  which the detailed models replace. The Professional School (`mesh1954`)
+  stays as a neighbouring block.
+- **Adds a simple overpass** across MacArthur Highway at Diego Silang St, from
+  the Professional School's west end to the medical center's side
+  (`OVERPASS`, in area coordinates). Its length, deck height and landing are
+  estimates from the satellite view; correct them in the script if needed.
+- **Gives everything flat colours** and compresses it with Draco.
+
+**Placement.** Each detailed model was fitted onto its block in the area file
+by rotation about the vertical axis and a horizontal offset. The front
+entrances and the overpass decided which way each building faces:
+
+- the A Building's front entrances face MacArthur Highway;
+- EYA's curved lobby faces the highway.
+
+| Building | Area block | Rotation | Offset (area x, y) | Ground height |
+|---|---|---|---|---|
+| EYA | `TPX_Buildings_mesh1893` | 297.25° | 516.94, 362.96 | 87.4 m |
+| A Building | `TPX_Buildings_mesh2312` | 27.25° | 362.9, 494.76 | 90.6 m |
+
+In the kiosk, the A Building is placed at `[-187.7, 3.2, 76.6]` and turned
+1.5708 rad (90°) in EYA's coordinates. This is in `campus.neighbours` in
+`client/src/data/eyaNavigation.ts`. If a model's origin changes in Blender,
+fit it again and update both places.
 
 ## 3. The Draco decoder
 

@@ -1,10 +1,11 @@
 import { Suspense, useRef, useState } from "react";
-import { Building2 } from "lucide-react";
+import { Building2, Map as MapIcon } from "lucide-react";
 import { Canvas } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
 import type { BuildingConfig, Destination } from "@/data/navigation";
 import {
   BUILDING_VIEW,
+  CAMPUS_VIEW,
   destinationLegs,
   firstFloorFor,
   LABEL_Z_RANGE,
@@ -21,6 +22,7 @@ import {
   RoutePath,
 } from "@/components/map/BuildingScene";
 import { useBuildingModel } from "@/components/map/buildingModel";
+import { CampusScene } from "@/components/map/CampusScene";
 
 function MapUnavailable({ modelUrl }: { modelUrl: string }) {
   return (
@@ -58,7 +60,7 @@ function Scene({
 }) {
   const prepared = useBuildingModel(building);
   const onKioskFloor =
-    view.mode === "building" || view.floor === building.kioskFloor;
+    view.mode !== "floor" || view.floor === building.kioskFloor;
   const leg = routeLegInView(building, view, destination);
   const legs = destination ? destinationLegs(building, destination) : [];
   // Legs are rebuilt on each render for single-floor routes, so match by floor.
@@ -71,6 +73,13 @@ function Scene({
   return (
     <>
       <BuildingModel prepared={prepared} building={building} view={view} />
+      {building.campus && (
+        <CampusScene
+          campus={building.campus}
+          buildingName={building.name}
+          visible={view.mode === "campus"}
+        />
+      )}
       <CameraRig
         prepared={prepared}
         building={building}
@@ -136,13 +145,14 @@ export function BuildingFloorMap({
         // Tapping the building (not dragging it) opens it, per the kiosk plan.
         const start = press.current;
         press.current = null;
-        if (
-          view.mode === "building" &&
+        const tapped =
           start &&
           e.target instanceof HTMLCanvasElement &&
-          Math.hypot(e.clientX - start.x, e.clientY - start.y) < TAP_SLOP
-        )
-          openBuilding();
+          Math.hypot(e.clientX - start.x, e.clientY - start.y) < TAP_SLOP;
+        if (!tapped) return;
+        // Campus: tapping goes to the building; building: into its floor.
+        if (view.mode === "campus") setView(BUILDING_VIEW);
+        else if (view.mode === "building") openBuilding();
       }}
     >
       <ModelErrorBoundary
@@ -200,6 +210,20 @@ export function BuildingFloorMap({
         aria-label="Floors"
         className="absolute right-4 top-16 z-20 flex flex-col gap-1 rounded-xl bg-white/95 p-1.5 shadow"
       >
+        {building.campus && (
+          <button
+            aria-pressed={view.mode === "campus"}
+            aria-label="Campus"
+            title="Campus"
+            onClick={() => setView(CAMPUS_VIEW)}
+            className={cn(
+              "grid size-10 place-items-center rounded-lg text-[#17365d]",
+              view.mode === "campus" && "bg-[#17365d] text-white"
+            )}
+          >
+            <MapIcon size={18} />
+          </button>
+        )}
         <button
           aria-pressed={view.mode === "building"}
           aria-label="Whole building"
@@ -239,9 +263,11 @@ export function BuildingFloorMap({
         })}
       </nav>
       <p className="absolute bottom-4 left-4 z-20 rounded-lg bg-white/95 px-3 py-2 text-xs text-[#52657a]">
-        {view.mode === "building"
-          ? "Tap the building to look inside · Drag to turn · Pinch or scroll to zoom"
-          : "Drag to turn · Pinch or scroll to zoom · Two fingers or right-drag to pan"}
+        {view.mode === "campus"
+          ? `Tap to look at the ${building.name} · Drag to turn · Pinch or scroll to zoom`
+          : view.mode === "building"
+            ? "Tap the building to look inside · Drag to turn · Pinch or scroll to zoom"
+            : "Drag to turn · Pinch or scroll to zoom · Two fingers or right-drag to pan"}
       </p>
     </div>
   );

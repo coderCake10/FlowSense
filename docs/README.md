@@ -40,6 +40,10 @@
 | QA | [qa/step-08c-test-report.md](qa/step-08c-test-report.md) | Step 8c test report |
 | Changes | [changes/step-08d-mobile-directions.md](changes/step-08d-mobile-directions.md) | Step 8d: phone handoff with the kiosk's route, step-by-step directions, loading page (team wireframe) |
 | QA | [qa/step-08d-test-report.md](qa/step-08d-test-report.md) | Step 8d test report |
+| Changes | [changes/step-08e-queue-order.md](changes/step-08e-queue-order.md) | Step 8e: Destination Queue in the shortest walking order, with "Keep my order" |
+| QA | [qa/step-08e-test-report.md](qa/step-08e-test-report.md) | Step 8e test report |
+| Changes | [changes/step-09a-campus-view.md](changes/step-09a-campus-view.md) | Step 9a: campus view with the A Building, the neighbourhood and the overpass |
+| QA | [qa/step-09a-test-report.md](qa/step-09a-test-report.md) | Step 9a test report |
 | Setup | [setup/map-annotation.md](setup/map-annotation.md) | How to annotate a floor |
 | API | [openapi/flowsense-openapi.yaml](openapi/flowsense-openapi.yaml) | OpenAPI contract (served by Swagger UI at `/docs/`) |
 

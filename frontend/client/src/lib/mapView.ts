@@ -9,11 +9,15 @@ import type {
   RouteLeg,
 } from "@/data/navigation";
 
-/** The whole building from outside, or one floor with the ones above it
- * lifted away. */
-export type MapView = { mode: "building" } | { mode: "floor"; floor: string };
+/** The campus around the building, the whole building from outside, or one
+ * floor with the ones above it lifted away. */
+export type MapView =
+  | { mode: "campus" }
+  | { mode: "building" }
+  | { mode: "floor"; floor: string };
 
 export const BUILDING_VIEW: MapView = { mode: "building" };
+export const CAMPUS_VIEW: MapView = { mode: "campus" };
 
 /** Keep map labels below app overlays (dialogs, keyboard use z-50). drei's
  * default range (~16.7M) would paint map labels on top of every modal. */
@@ -22,8 +26,8 @@ export const LABEL_Z_RANGE: [number, number] = [10, 0];
 /** Parts of the model that show or hide together. */
 export const EXTERIOR_PART = "exterior";
 
-/** Which parts a view shows: the building view shows everything; a floor
- * view hides the exterior and every floor above the chosen one. */
+/** Which parts a view shows: the campus and building views show everything;
+ * a floor view hides the exterior and every floor above the chosen one. */
 export function visibleParts(
   model: BuildingConfig["model"],
   view: MapView
@@ -33,7 +37,7 @@ export function visibleParts(
       ? model.floors.findIndex(f => f.object === view.floor)
       : model.floors.length - 1;
   const parts: Record<string, boolean> = {
-    [EXTERIOR_PART]: view.mode === "building",
+    [EXTERIOR_PART]: view.mode !== "floor",
   };
   model.floors.forEach((floor, index) => {
     parts[floor.object] = index <= chosen;
@@ -69,6 +73,7 @@ export function floorByObject(building: BuildingConfig, object: string) {
 }
 
 export function viewLabel(building: BuildingConfig, view: MapView) {
+  if (view.mode === "campus") return building.campus?.name ?? building.name;
   if (view.mode === "building") return `${building.name} · Whole building`;
   const floor = floorByObject(building, view.floor);
   return `${building.name} · ${floor?.name ?? view.floor}`;

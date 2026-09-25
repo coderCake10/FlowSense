@@ -14,6 +14,8 @@ export const DRACO_DECODER_PATH = `${import.meta.env.BASE_URL}draco/`;
 /** Every model file the kiosk needs. `models:check` reads this list. */
 export const MODEL_FILES = {
   eya: "EYA.glb",
+  aBuilding: "A.glb",
+  campus: "CAMPUS.glb",
 } as const;
 
 export function modelUrl(file: string) {

@@ -11,7 +11,8 @@ What it does (see docs/setup/building-models.md):
   * exports every collection, including ones hidden in the viewport, and keeps
     the collection hierarchy (BUILDING_EYA > FLOOR_1 ...) as nodes so the
     kiosk can show or hide each floor;
-  * removes objects listed with --drop (by exact name);
+  * removes objects listed with --drop and collections listed with
+    --drop-collection (by exact name; a collection goes with everything in it);
   * scales textures down to at most --max-texture pixels and saves them as
     JPEG (images with transparency stay PNG);
   * compresses geometry with Draco. Shapes, names and materials are unchanged.
@@ -32,6 +33,9 @@ def parse_args():
     parser.add_argument("--jpeg-quality", type=int, default=80)
     parser.add_argument("--drop", action="append", default=[],
                         help="Exact name of an object to leave out (repeatable)")
+    parser.add_argument("--drop-collection", action="append", default=[],
+                        help="Exact name of a collection to leave out, with "
+                             "everything in it (repeatable)")
     parser.add_argument("--no-draco", action="store_true",
                         help="Skip Draco compression (larger file)")
     return parser.parse_args(argv)
@@ -59,6 +63,20 @@ def drop_objects(names):
         print(f"[export] dropped {name!r}")
 
 
+def drop_collections(names):
+    for name in names:
+        coll = bpy.data.collections.get(name)
+        if coll is None:
+            print(f"[export] --drop-collection: no collection named {name!r}; skipped")
+            continue
+        for obj in list(coll.all_objects):
+            bpy.data.objects.remove(obj)
+        for child in list(coll.children_recursive):
+            bpy.data.collections.remove(child)
+        bpy.data.collections.remove(coll)
+        print(f"[export] dropped collection {name!r}")
+
+
 def shrink_textures(max_side):
     for image in bpy.data.images:
         width, height = image.size
@@ -72,6 +90,7 @@ def shrink_textures(max_side):
 def main():
     args = parse_args()
     show_everything()
+    drop_collections(args.drop_collection)
     drop_objects(args.drop)
     shrink_textures(args.max_texture)
     bpy.ops.export_scene.gltf(

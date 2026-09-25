@@ -257,6 +257,12 @@ export function CameraRig({
       }
       if (box.isEmpty()) box.copy(prepared.buildingBox);
     }
+    // The campus view frames the buildings around this one, too.
+    const campusFrame = building.campus?.frame;
+    const campusBox = campusFrame
+      ? new Box3(new Vector3(...campusFrame[0]), new Vector3(...campusFrame[1]))
+      : null;
+    if (view.mode === "campus" && campusBox) box.copy(campusBox);
     const goal = frame(box, r.goalDirection, size.width, size.height);
     r.goalTarget.copy(goal.center);
     r.goalZoom = goal.zoom;
@@ -267,7 +273,10 @@ export function CameraRig({
         size.width,
         size.height
       ).zoom;
-      controls.minZoom = whole * 0.5;
+      const widest = campusBox
+        ? frame(campusBox, r.goalDirection, size.width, size.height).zoom
+        : whole;
+      controls.minZoom = Math.min(whole, widest) * 0.5;
       controls.maxZoom = whole * 10;
     }
     if (!r.placed) {

@@ -117,6 +117,28 @@ check(
     (await pressed("Whole building")) === "true"
 );
 
+await page.getByRole("button", { name: "Campus", exact: true }).click();
+await page.waitForTimeout(3000);
+check(
+  "B7b",
+  "Campus button shows the campus with both buildings and the overpass named",
+  (await viewLabel("AUF Campus")) &&
+    (await page.getByText("A Building", { exact: true }).isVisible()) &&
+    (await page.getByText("Overpass", { exact: true }).isVisible())
+);
+await page.screenshot({ path: `${OUT}/step7b-campus.png` });
+const campusBox = await page.locator("canvas").boundingBox();
+await page.mouse.click(
+  campusBox.x + campusBox.width / 2,
+  campusBox.y + campusBox.height / 2
+);
+await page.waitForTimeout(500);
+check(
+  "B7c",
+  "Tapping the campus goes to the whole building",
+  await viewLabel("EYA Building · Whole building")
+);
+
 // Attract screen: stop its 15 s jump to the kiosk while it is checked.
 const attract = await browser.newPage({
   viewport: { width: 1440, height: 900 },

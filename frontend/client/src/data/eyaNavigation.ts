@@ -86,4 +86,28 @@ export const eyaBuilding: BuildingConfig = {
     far: 500,
   },
   destinations,
+  // Placement fitted onto the team's area model (LFA_AUF.obj): see
+  // scripts/blender/build_campus_model.py and docs/setup/building-models.md.
+  campus: {
+    name: "AUF Campus",
+    modelUrl: modelUrl(MODEL_FILES.campus),
+    neighbours: [
+      {
+        name: "A Building",
+        modelUrl: modelUrl(MODEL_FILES.aBuilding),
+        position: [-187.7, 3.2, 76.6],
+        rotationY: 1.5708,
+        labelAt: [-187.7, 21.2, 134.6],
+      },
+    ],
+    frame: [
+      [-215.4, 0, -30],
+      [7, 22, 193.6],
+    ],
+    labelAt: [-3, 24, 3],
+    landmarks: [
+      { name: "Overpass", at: [-81.2, 7, 62] },
+      { name: "Professional School", at: [-72.7, 18, 2.4] },
+    ],
+  },
 };

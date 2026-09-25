@@ -119,3 +119,5 @@ e2e/output/
 client/public/models/*
 !client/public/models/README.md
 !client/public/models/EYA.glb
+!client/public/models/A.glb
+!client/public/models/CAMPUS.glb

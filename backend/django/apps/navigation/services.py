@@ -14,6 +14,7 @@ so they can be unit-tested and reused (e.g. from a Celery task that
 pre-warms the graph) without touching HTTP at all.
 """
 import heapq
+import itertools
 import math
 import time
 from dataclasses import dataclass
@@ -379,6 +380,63 @@ def _resolve_navigation_session(navigation_session_id) -> Optional[NavigationSes
 
 
 # --------------------------------------------------------------------------
+# Destination order (the kiosk's "shortest walk" queue)
+# --------------------------------------------------------------------------
+
+# Up to this many stops every visiting order is tried (7! = 5,040 orders);
+# beyond it, nearest-neighbour order improved by 2-opt.
+EXACT_ORDER_LIMIT = 7
+
+
+def _path_cost(graph: _RoutingGraph, from_id: int, to_id: int) -> float:
+    """Weighted walking cost of the A* path, or infinity when unreachable."""
+    try:
+        path = _a_star(graph, from_id, to_id)
+    except RouteNotFoundError:
+        return math.inf
+    return sum(
+        next(e.weight for e in graph.adjacency[a] if e.to_node_id == b)
+        for a, b in zip(path, path[1:])
+    )
+
+
+def best_visiting_order(graph: _RoutingGraph, origin_id: int, stop_ids: Sequence[int]) -> List[int]:
+    """
+    The order of `stop_ids` with the shortest total walk from `origin_id`,
+    visiting each stop once and not returning (an open path). Stairs and
+    elevators count with their weights, as in routing. Ties keep the order
+    given; if no order connects every stop, the given order is returned.
+    """
+    stops = list(stop_ids)
+    if len(stops) < 2:
+        return stops
+    points = [origin_id] + stops
+    cost = {(a, b): _path_cost(graph, a, b) for a in points for b in stops if a != b}
+
+    def total(order):
+        return sum(cost[(a, b)] for a, b in zip([origin_id] + list(order), order))
+
+    if len(stops) <= EXACT_ORDER_LIMIT:
+        best = min(itertools.permutations(stops), key=total)
+    else:
+        remaining, best, here = set(stops), [], origin_id
+        while remaining:
+            here = min(remaining, key=lambda s: (cost[(here, s)], stops.index(s)))
+            best.append(here)
+            remaining.remove(here)
+        improved = True
+        while improved:
+            improved = False
+            for i in range(len(best) - 1):
+                for j in range(i + 1, len(best)):
+                    candidate = best[:i] + best[i:j + 1][::-1] + best[j + 1:]
+                    if total(candidate) < total(best) - 1e-9:
+                        best, improved = candidate, True
+    best = list(best)
+    return best if math.isfinite(total(best)) else stops
+
+
+# --------------------------------------------------------------------------
 # Public entry points
 # --------------------------------------------------------------------------
 
@@ -388,15 +446,17 @@ def generate_route(
     origin_node: Node,
     destination_nodes: Sequence[Node],
     navigation_session_id=None,
+    optimize_order: bool = False,
 ) -> dict:
     """
     POST /navigation/routes.
 
     Runs A* leg-by-leg across `origin_node -> destination_nodes[0] ->
-    destination_nodes[1] -> ...`, IN THE ORDER GIVEN. This does not
-    re-optimize destination order (no TSP solving) — the client controls
-    queue order (per the Kiosk's Destination Queue UI), and preserving it
-    is a deliberate choice, not an oversight.
+    destination_nodes[1] -> ...`. By default the order given is kept (the
+    visitor's own order, e.g. enrollment steps). With `optimize_order`, the
+    destinations are first put in the visiting order with the shortest
+    total walk (`best_visiting_order`); the response lists them in that
+    order (`destination_order`).
 
     Always persists an analytics.NavigationRequest first (status=
     'requested'), then updates it to 'generated' or 'failed' once
@@ -410,6 +470,12 @@ def generate_route(
     """
     start_time = time.perf_counter()
     navigation_session = _resolve_navigation_session(navigation_session_id)
+    graph = _build_graph()
+    by_id = {node.id: node for node in destination_nodes}
+    # Repeated stops keep the order given (the visitor asked for them).
+    if optimize_order and 1 < len(by_id) == len(destination_nodes):
+        order = best_visiting_order(graph, origin_node.id, list(by_id))
+        destination_nodes = [by_id[node_id] for node_id in order]
 
     with transaction.atomic():
         navigation_request = NavigationRequest.objects.create(
@@ -430,7 +496,6 @@ def generate_route(
         )
 
     try:
-        graph = _build_graph()
         leg_endpoints = [origin_node.id] + [d.id for d in destination_nodes]
         segments: List[dict] = []
         total_distance = 0.0

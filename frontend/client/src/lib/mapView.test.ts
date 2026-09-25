@@ -7,6 +7,7 @@ import {
   routeLegInView,
   splitByFloor,
   BUILDING_VIEW,
+  CAMPUS_VIEW,
   destinationFloor,
   EXTERIOR_PART,
   floorAtHeight,
@@ -189,5 +190,48 @@ describe("route legs", () => {
       },
     ]);
     expect(firstFloorFor(building, { ...demo, legs })).toBe("FLOOR_1");
+  });
+});
+
+describe("campus view", () => {
+  it("shows the whole building, like the building view", () => {
+    expect(visibleParts(building.model, CAMPUS_VIEW)).toEqual(
+      visibleParts(building.model, BUILDING_VIEW)
+    );
+  });
+
+  it("is named after the campus, or the building when there is none", () => {
+    expect(viewLabel(building, CAMPUS_VIEW)).toBe("EYA Building");
+    const withCampus = {
+      ...building,
+      campus: {
+        name: "AUF Campus",
+        modelUrl: "/models/campus.glb",
+        neighbours: [],
+        frame: [
+          [0, 0, 0],
+          [1, 1, 1],
+        ],
+        labelAt: [0, 0, 0],
+        landmarks: [],
+      },
+    } satisfies BuildingConfig;
+    expect(viewLabel(withCampus, CAMPUS_VIEW)).toBe("AUF Campus");
+  });
+
+  it("draws no route (routes are drawn per floor)", () => {
+    const destination = {
+      id: "d",
+      name: "Room",
+      code: "EA-1",
+      color: "#000",
+      points: [
+        [0, 1, 0],
+        [0, 1, 5],
+      ] as Point3[],
+      building: "EYA Building",
+      floor: "First floor",
+    };
+    expect(routeLegInView(building, CAMPUS_VIEW, destination)).toBeNull();
   });
 });

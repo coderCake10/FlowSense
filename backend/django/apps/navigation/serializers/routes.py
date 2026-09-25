@@ -57,6 +57,8 @@ class NavigationRouteCreateSerializer(serializers.Serializer):
     origin_node_id = serializers.PrimaryKeyRelatedField(
         source="origin_node", queryset=_ROUTABLE_NODES
     )
+    # The kiosk's queue sends true unless the visitor chose "Keep my order".
+    optimize_order = serializers.BooleanField(required=False, default=False)
     destination_node_ids = serializers.ListField(
         child=serializers.PrimaryKeyRelatedField(queryset=_ROUTABLE_NODES),
         allow_empty=False,

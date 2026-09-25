@@ -74,6 +74,7 @@ class NavigationRouteCreateView(APIView):
                 origin_node=validated["origin_node"],
                 destination_nodes=validated["destination_node_ids"],
                 navigation_session_id=validated.get("navigation_session_id"),
+                optimize_order=validated.get("optimize_order", False),
             )
         except services.NavigationSessionInvalidError as exc:
             raise NavigationSessionInvalid(str(exc))

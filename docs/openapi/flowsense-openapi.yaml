@@ -471,6 +471,14 @@ paths:
                     type: integer
                     format: int64
                   minItems: 1
+                optimize_order:
+                  type: boolean
+                  default: false
+                  description: >-
+                    When true, the destinations are visited in the order with the shortest
+                    total walk from the origin (every order is tried for up to 7 stops;
+                    nearest-neighbour with 2-opt beyond that). The response lists them in
+                    that order (destination_order). When false, the order given is kept.
                 navigation_session_id:
                   type: string
                   format: uuid
