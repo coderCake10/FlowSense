@@ -10,12 +10,12 @@
 | Changes | [changes/step-02-qr-handoff.md](changes/step-02-qr-handoff.md) | Step 2 change record: QR handoff and mobile checklist |
 | QA | [qa/step-02-test-report.md](qa/step-02-test-report.md) | Step 2 test plan, results, and how to re-run them |
 | Setup | [setup/team-local-setup.md](setup/team-local-setup.md) | **Start here (groupmates):** full Windows + Docker setup, first sign-in, HeidiSQL, devices, troubleshooting |
-| Setup | [setup/local-development.md](setup/local-development.md) | Running backend and frontend without Docker, and running the tests |
+| Setup | [setup/local-development.md](setup/local-development.md) | Running backend and frontend without Docker, and running the tests (including which server each browser suite needs) |
 | Changes | [changes/step-04a-platform-and-auth.md](changes/step-04a-platform-and-auth.md) | Step 4a: API layout, security defaults, sign-in |
 | QA | [qa/step-04a-test-report.md](qa/step-04a-test-report.md) | Step 4a test report |
 | Changes | [changes/step-04b-database-conformance.md](changes/step-04b-database-conformance.md) | Step 4b: schema matches the spec; EYA seed |
 | QA | [qa/step-04b-test-report.md](qa/step-04b-test-report.md) | Step 4b test report |
-| Setup | [setup/building-models.md](setup/building-models.md) | The building models: committed kiosk `.glb` files, exporting a new version from Blender, the Draco decoder |
+| Setup | [setup/building-models.md](setup/building-models.md) | The building models: committed kiosk `.glb` files, exporting a new version from Blender, the Draco decoder, replacing a model through Asset Management |
 | Changes | [changes/step-03-local-models.md](changes/step-03-local-models.md) | Step 3 (revised): models moved out of git |
 | Changes | [changes/step-04-hardware-mqtt-pipeline.md](changes/step-04-hardware-mqtt-pipeline.md) | Step 4 follow-up: ESP32 → MQTT → database pipeline fixes |
 | QA | [qa/step-04-hardware-mqtt-pipeline-test-report.md](qa/step-04-hardware-mqtt-pipeline-test-report.md) | Pipeline test report |
@@ -44,6 +44,12 @@
 | QA | [qa/step-08e-test-report.md](qa/step-08e-test-report.md) | Step 8e test report |
 | Changes | [changes/step-09a-campus-view.md](changes/step-09a-campus-view.md) | Step 9a: campus view with the A Building, the neighbourhood and the overpass |
 | QA | [qa/step-09a-test-report.md](qa/step-09a-test-report.md) | Step 9a test report |
+| Changes | [changes/audit-01-system-check.md](changes/audit-01-system-check.md) | System audit 1: dead buttons, simulated actions, out-of-date documents |
+| QA | [qa/audit-01-test-report.md](qa/audit-01-test-report.md) | System audit 1 test report |
+| Changes | [changes/step-10-assets.md](changes/step-10-assets.md) | Step 10: Assets API, Asset Management connected, the kiosk loads the live model |
+| QA | [qa/step-10-test-report.md](qa/step-10-test-report.md) | Step 10 test report |
+| Changes | [changes/step-11-reports.md](changes/step-11-reports.md) | Step 11: analytics reports (snapshots, printable PDF, CSV) |
+| QA | [qa/step-11-test-report.md](qa/step-11-test-report.md) | Step 11 test report |
 | Setup | [setup/map-annotation.md](setup/map-annotation.md) | How to annotate a floor |
 | API | [openapi/flowsense-openapi.yaml](openapi/flowsense-openapi.yaml) | OpenAPI contract (served by Swagger UI at `/docs/`) |
 

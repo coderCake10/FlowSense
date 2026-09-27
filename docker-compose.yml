@@ -56,6 +56,8 @@ services:
       - REDIS_CACHE_URL=redis://redis:6379/1
     volumes:
       - ./backend/django:/app
+      # The committed building models, for `manage.py import_asset /models/…`.
+      - ${FLOWSENSE_MODELS_DIR:-./frontend/client/public/models}:/models:ro
     ports:
       - "8000:8000"
     depends_on:

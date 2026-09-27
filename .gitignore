@@ -16,6 +16,8 @@ venv.bak/
 # Django
 *.log
 local_settings.py
+# Uploaded building models (Assets API)
+backend/django/media/
 db.sqlite3
 db.sqlite3-journal
 

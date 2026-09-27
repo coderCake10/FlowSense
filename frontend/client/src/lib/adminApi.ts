@@ -280,7 +280,7 @@ export const keys = {
 };
 
 /** A query that serves demo data when no API is configured. */
-function useAdminQuery<T>(
+export function useAdminQuery<T>(
   queryKey: readonly unknown[],
   path: string,
   demo: T,
@@ -304,7 +304,7 @@ function useAdminQuery<T>(
 }
 
 /** A mutation that refreshes the given queries and reports errors as toasts. */
-function useAdminMutation<Input, Output>(
+export function useAdminMutation<Input, Output>(
   run: (input: Input) => Promise<Output>,
   invalidate: readonly (readonly unknown[])[],
   successMessage?: (output: Output, input: Input) => string
@@ -356,6 +356,18 @@ export interface DeviceFilters {
 const rowsOf = <T,>(path: string) =>
   apiClient.getPage<T>(path).then(page => page.results);
 
+/** Every row of a paginated list, page after page (pages hold at most 100). */
+async function allRowsOf<T>(path: string): Promise<T[]> {
+  const rows: T[] = [];
+  for (let page = 1; ; page++) {
+    const joiner = path.includes("?") ? "&" : "?";
+    const result = await apiClient.getPage<T>(`${path}${joiner}page=${page}`);
+    rows.push(...result.results);
+    const pages = result.meta?.total_pages ?? 1;
+    if (page >= pages || !result.results.length) return rows;
+  }
+}
+
 function withQuery(path: string, params: Record<string, string | undefined>) {
   const query = new URLSearchParams(
     Object.entries(params).filter(([, v]) => v) as [string, string][]
@@ -379,11 +391,12 @@ export function useDevices(filters: DeviceFilters) {
       device_type: filters.device_type || undefined,
       status: filters.status || undefined,
       search: filters.search || undefined,
-      // The registry shows every device on one page (the contract caps pages at 100).
+      // The registry shows every device, fetched 100 at a time (the
+      // contract's largest page).
       page_size: "100",
     }),
     demo,
-    { refetchInterval: 15_000, fetcher: rowsOf<DeviceRow> }
+    { refetchInterval: 15_000, fetcher: allRowsOf<DeviceRow> }
   );
 }
 

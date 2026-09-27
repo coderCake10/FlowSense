@@ -116,6 +116,18 @@ class NodeAnnotationCreateSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class NodeAnnotationMoveSerializer(serializers.Serializer):
+    """PATCH /annotations/nodes/{id}: a new position (and optionally name)."""
+
+    geometry = GeoJSONField()
+    name = serializers.CharField(max_length=150, required=False)
+
+    def validate_geometry(self, value):
+        if value.geom_type != "Point":
+            raise serializers.ValidationError("A point is required.")
+        return value
+
+
 class NodeAnnotationDetailSerializer(NodeAnnotationSerializer):
     """
     GET /annotations/nodes/{id} — adds the type-specific "contextual

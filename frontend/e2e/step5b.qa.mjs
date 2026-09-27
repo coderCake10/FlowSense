@@ -86,8 +86,8 @@ check(
 );
 check(
   "D2",
-  "The system summary counts the 92 seeded rooms",
-  await visible(page.getByText(/\d+ \/ 92/))
+  "The system summary counts the 145 seeded rooms (EYA 97, A 48)",
+  await visible(page.getByText(/\d+ \/ 145/))
 );
 check("D3", "No demo-data notice with the API connected", (await page.getByText("Demo data").count()) === 0);
 
@@ -242,9 +242,32 @@ await kioskPage.getByRole("button", { name: "Back" }).click();
 await kioskPage.waitForURL("**/attraction");
 await page.waitForTimeout(500);
 check("K4", "A visitor's touch, then Back, is counted in today's kiosk sessions", (await sessionsToday()) === before + 1);
-await kioskBrowser.close();
 const kioskDeviceId = (await (await page.request.get(`${BASE}/api/v1/hardware/devices?search=${kioskId}`)).json()).data[0]?.id;
-if (kioskDeviceId) await page.request.delete(`${BASE}/api/v1/hardware/devices/${kioskDeviceId}`);
+// Deleted, the same iPad keeps its ID: the attract screen says so, and the
+// Hardware page can bring it back (status Deleted, then Restore).
+await page.request.delete(`${BASE}/api/v1/hardware/devices/${kioskDeviceId}`);
+await kioskPage.goto(`${BASE}/attraction`);
+check(
+  "K5",
+  "A deleted kiosk says so on its attract screen, with how to restore it",
+  await visible(kioskPage.getByText(/deleted in Hardware Management/))
+);
+await page.goto(`${BASE}/hardware`);
+await page.getByLabel("Filter by status").selectOption("decommissioned");
+const deletedRow = page.getByRole("row").filter({ hasText: kioskId });
+await deletedRow.getByRole("button", { name: "Restore" }).click();
+await page.getByRole("dialog").getByRole("button", { name: "Register device" }).click();
+await page.getByLabel("Filter by status").selectOption("");
+await kioskPage.reload();
+await kioskPage.waitForTimeout(1500);
+check(
+  "K6",
+  "Restore brings the deleted kiosk back, and its heartbeat counts again",
+  (await visible(page.getByRole("row").filter({ hasText: `QA Kiosk ${RUN}` }))) &&
+    (await (await page.request.get(`${BASE}/api/v1/hardware/devices/${kioskDeviceId}`)).json()).data.status === "online"
+);
+await kioskBrowser.close();
+await page.request.delete(`${BASE}/api/v1/hardware/devices/${kioskDeviceId}`);
 
 // ---------- Activity on the dashboard ----------
 await page.goto(`${BASE}/`);

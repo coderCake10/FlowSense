@@ -5,16 +5,17 @@ Backs:
   POST   /api/v1/annotations/nodes      (see NOTE in serializers/nodes.py
                                           on the doc's /{id} typo on this row)
   GET    /api/v1/annotations/nodes/{id}
+  PATCH  /api/v1/annotations/nodes/{id}   (additive: move a point; see below)
   DELETE /api/v1/annotations/nodes/{id}
 
 A ViewSet fits here even without a `list` action — create + retrieve +
 destroy on one resource is exactly what CreateModelMixin/
-RetrieveModelMixin/DestroyModelMixin are for. No update/partial_update:
-there's no PATCH for nodes in the API design (node edits happen through
-type-specific endpoints instead — PATCH /annotations/rooms/{id}, hardware
-assignment through the Hardware API, etc). DRF's router correctly omits
-the collection-level GET and the detail-level PATCH routes on its own
-since neither `list` nor `update` exists on this class.
+RetrieveModelMixin/DestroyModelMixin are for. The API design has no PATCH
+for nodes (node details change through type-specific endpoints instead —
+PATCH /annotations/rooms/{id}, hardware assignment through the Hardware
+API). PATCH here is an addition for one thing only: moving a point (its
+position, optionally its name), which Map Annotation's drag needs; see
+annotation.services.move_node.
 
 `create()` and the create branch of `get_serializer_class()` deliberately
 don't go through CreateModelMixin's default flow: the input shape
@@ -29,7 +30,11 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from annotation import services
-from annotation.serializers import NodeAnnotationCreateSerializer, NodeAnnotationDetailSerializer
+from annotation.serializers import (
+    NodeAnnotationCreateSerializer,
+    NodeAnnotationDetailSerializer,
+    NodeAnnotationMoveSerializer,
+)
 from common.permissions import IsAdminUser
 from map.models import Node
 
@@ -41,7 +46,7 @@ class NodeAnnotationViewSet(
     GenericViewSet,
 ):
     permission_classes = [IsAdminUser]
-    http_method_names = ["get", "post", "delete", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
         return Node.objects.filter(deleted_at__isnull=True)
@@ -74,6 +79,19 @@ class NodeAnnotationViewSet(
 
         output_serializer = NodeAnnotationDetailSerializer(node)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        node = self.get_object()
+        move = NodeAnnotationMoveSerializer(data=request.data)
+        move.is_valid(raise_exception=True)
+        services.move_node(
+            node,
+            geometry=move.validated_data["geometry"],
+            name=move.validated_data.get("name"),
+            actor=request.admin_user,
+        )
+        node.refresh_from_db()
+        return Response(NodeAnnotationDetailSerializer(node).data)
 
     def destroy(self, request, *args, **kwargs):
         node = self.get_object()

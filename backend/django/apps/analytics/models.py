@@ -8,6 +8,7 @@ analytics.qr_events,
 analytics.audit_events,
 analytics.hourly_kiosk_statistics, 
 analytics.sensor_statistics,
+analytics.reports (added in step 11, QA-65),
 operations.alerts
 
 `operations.alerts` is owned here (despite the `operations` schema prefix)
@@ -27,6 +28,7 @@ assets (writes AuditEvent on asset/version/validation changes),
 authentication (Alert.acknowledged_by),
 system (Alert counts for system status)
 """
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 
 from authentication.models import AdminUser
@@ -341,3 +343,67 @@ class Alert(models.Model):
 
     def __str__(self):
         return f"[{self.severity}] {self.title}"
+
+
+class Report(models.Model):
+    """
+    A generated analytics report: a snapshot of the chosen sections' figures
+    for a period, taken when it was generated, so it reads the same every
+    time it's downloaded however the live data changes afterwards. CSV and
+    the printable (PDF) page are rendered from `data` on request.
+
+    Not in the original schema; added in step 11 with the team's approval
+    (QA-65). See analytics/reports.py for the section format.
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_GENERATING = "generating"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_GENERATING, "Generating"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+    FORMAT_PDF = "pdf"
+    FORMAT_CSV = "csv"
+    FORMAT_CHOICES = [(FORMAT_PDF, "PDF"), (FORMAT_CSV, "CSV")]
+
+    id = models.BigAutoField(primary_key=True)
+    title = models.CharField(max_length=255)
+    sections = models.JSONField(default=list)
+    period_start = models.DateTimeField()
+    period_end = models.DateTimeField()
+    filters = models.JSONField(default=dict)
+    format = models.CharField(max_length=10, choices=FORMAT_CHOICES, default=FORMAT_PDF)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    format_version = models.IntegerField(default=1)
+    data = models.JSONField(null=True, blank=True, encoder=DjangoJSONEncoder)
+    error = models.TextField(null=True, blank=True)
+    generated_by = models.ForeignKey(
+        AdminUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reports",
+        db_column="generated_by",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = '"analytics"."reports"'
+        constraints = [
+            choice_check("chk_reports_status", "status", ["pending", "generating", "completed", "failed"]),
+            choice_check("chk_reports_format", "format", ["pdf", "csv"]),
+            models.CheckConstraint(
+                condition=models.Q(period_start__lte=models.F("period_end")), name="chk_reports_period"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["-created_at"], name="idx_reports_created"),
+        ]
+
+    def __str__(self):
+        return f"Report #{self.pk} ({self.status})"

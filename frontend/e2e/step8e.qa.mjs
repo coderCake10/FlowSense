@@ -29,7 +29,7 @@ const errors = [];
 async function queueThree(page) {
   await page.goto(`${BASE}/kiosk`);
   await page
-    .getByText(/^92 Destinations · by floor$/)
+    .getByText(/^97 Destinations · by floor$/)
     .waitFor({ timeout: 60000 });
   // All three are first-floor rooms in the default directory.
   for (const name of [

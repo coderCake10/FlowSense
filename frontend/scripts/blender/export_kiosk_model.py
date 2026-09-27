@@ -13,6 +13,12 @@ What it does (see docs/setup/building-models.md):
     kiosk can show or hide each floor;
   * removes objects listed with --drop and collections listed with
     --drop-collection (by exact name; a collection goes with everything in it);
+  * with --collect-loose NAME, puts objects that aren't in any collection
+    (e.g. room signs left at the top of the scene) into a group NAME, so the
+    kiosk can split them between floors by height;
+  * with --text-resolution N, draws text (room signs) with N curve steps
+    instead of the file's (Blender's default is 12: far more triangles than
+    signs read at kiosk distance need);
   * scales textures down to at most --max-texture pixels and saves them as
     JPEG (images with transparency stay PNG);
   * compresses geometry with Draco. Shapes, names and materials are unchanged.
@@ -36,6 +42,10 @@ def parse_args():
     parser.add_argument("--drop-collection", action="append", default=[],
                         help="Exact name of a collection to leave out, with "
                              "everything in it (repeatable)")
+    parser.add_argument("--text-resolution", type=int,
+                        help="Curve steps for text objects (fewer triangles)")
+    parser.add_argument("--collect-loose",
+                        help="Group objects outside every collection under this name")
     parser.add_argument("--no-draco", action="store_true",
                         help="Skip Draco compression (larger file)")
     return parser.parse_args(argv)
@@ -77,6 +87,19 @@ def drop_collections(names):
         print(f"[export] dropped collection {name!r}")
 
 
+def collect_loose(name):
+    scene = bpy.context.scene.collection
+    loose = list(scene.objects)
+    if not loose:
+        return
+    group = bpy.data.collections.new(name)
+    scene.children.link(group)
+    for obj in loose:
+        group.objects.link(obj)
+        scene.objects.unlink(obj)
+    print(f"[export] grouped {len(loose)} loose objects as {name!r}")
+
+
 def shrink_textures(max_side):
     for image in bpy.data.images:
         width, height = image.size
@@ -92,6 +115,12 @@ def main():
     show_everything()
     drop_collections(args.drop_collection)
     drop_objects(args.drop)
+    if args.text_resolution:
+        for curve in bpy.data.curves:
+            if curve.id_type == "CURVE" and hasattr(curve, "body"):
+                curve.resolution_u = args.text_resolution
+    if args.collect_loose:
+        collect_loose(args.collect_loose)
     shrink_textures(args.max_texture)
     bpy.ops.export_scene.gltf(
         filepath=args.out,

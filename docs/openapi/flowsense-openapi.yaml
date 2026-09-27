@@ -970,6 +970,39 @@ paths:
                 $ref: "#/components/schemas/NavigationNodeResponse"
         "404":
           $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Annotation]
+      summary: Move annotation node
+      description: >-
+        Addition to the API design (step 12b). Moves a point to a new position
+        (optionally renaming it) and redraws its connections as straight lines,
+        so routes follow it. Map Annotation's drag uses it.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [geometry]
+              properties:
+                geometry:
+                  $ref: "#/components/schemas/GeoJSONGeometry"
+                name:
+                  type: string
+                  maxLength: 150
+      responses:
+        "200":
+          description: The moved node
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationNodeResponse"
+        "400":
+          description: The geometry isn't a point
+        "404":
+          $ref: "#/components/responses/NotFound"
     delete:
       tags: [Annotation]
       summary: Delete annotation node
@@ -1106,6 +1139,138 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /annotations/labels:
+    get:
+      tags: [Annotation]
+      summary: Campus labels
+      description: Additive (step 14). The names in the kiosk's campus view. Public (the kiosk reads them).
+      responses:
+        "200":
+          description: Labels
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/CampusLabel"}
+    post:
+      tags: [Annotation]
+      summary: Add a campus label
+      description: Additive (step 14). Admin only. `area` defaults to the campus.
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CampusLabel"}
+      responses:
+        "201": {description: Created}
+        "400": {description: Missing name, or geometry isn't a 3D point}
+  /annotations/labels/{id}:
+    patch:
+      tags: [Annotation]
+      summary: Rename or move a campus label
+      description: Additive (step 14). Admin only.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200": {description: Updated}
+    delete:
+      tags: [Annotation]
+      summary: Delete a campus label (soft)
+      description: Additive (step 14). Admin only.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204": {description: Deleted}
+  /annotations/floors:
+    post:
+      tags: [Annotation]
+      summary: Add a floor to a building
+      description: >-
+        Additive (step 14). Admin only. `glb_node_name` defaults to FLOOR_<order>. A floor number already
+        used in the building is a 400; a floor deleted earlier with that number comes back.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [area, floor_order]
+              properties:
+                area: {type: integer, format: int64}
+                floor_order: {type: integer, minimum: 1}
+                glb_node_name: {type: string}
+                elevation: {type: number}
+                display_name: {type: string}
+                short_name: {type: string}
+      responses:
+        "201": {description: Created}
+  /annotations/floors/{id}:
+    patch:
+      tags: [Annotation]
+      summary: Rename a floor, or set its walking height
+      description: Additive (step 14). Admin only.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200": {description: Updated}
+    delete:
+      tags: [Annotation]
+      summary: Remove an empty floor (soft)
+      description: Additive (step 14). Admin only. 409 while the floor has rooms or points.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204": {description: Removed}
+        "409": {description: The floor still has rooms or points}
+  /annotations/rooms/new:
+    post:
+      tags: [Annotation]
+      summary: Add a room
+      description: >-
+        Additive (step 14). Admin only. The room code must be unique on its floor; a blank name is stored
+        as "Room <room_code>". The kiosk lists and searches it; place its door with a room node.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [floor, room_code]
+              properties:
+                floor: {type: integer, format: int64}
+                room_code: {type: string}
+                room_alias: {type: string}
+                room_type: {type: string}
+                description: {type: string}
+      responses:
+        "201": {description: Created}
+  /annotations/rooms/{id}/remove:
+    delete:
+      tags: [Annotation]
+      summary: Remove a room (soft)
+      description: Additive (step 14). Admin only. Its door points stay, as plain points.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "204": {description: Removed}
+  /annotations/buildings:
+    post:
+      tags: [Annotation]
+      summary: Add a building
+      description: >-
+        Additive (step 14). Admin only. Creates the building's area under the campus and floors 1..n
+        (FLOOR_1..n, "1F"/"First floor", …). Upload its model in Asset Management, linked to it, and
+        make it live; then place it (PATCH /map/areas/{id} placement) and annotate it.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name, floors]
+              properties:
+                code: {type: string, description: Unique; stored upper case.}
+                name: {type: string}
+                floors: {type: integer, minimum: 1, maximum: 50}
+      responses:
+        "201": {description: Created}
+        "400": {description: Code already used, or a field missing}
   /annotations/rooms/{id}:
     patch:
       tags: [Annotation]
@@ -1300,7 +1465,11 @@ paths:
     post:
       tags: [Hardware]
       summary: Register device
-      description: Officially registers an internally discovered device to be managed by the system.
+      description: >-
+        Officially registers an internally discovered device to be managed by
+        the system. Also restores a deleted (decommissioned) device (step 12c):
+        it returns to the registry and its messages count again. List deleted
+        devices with `GET /hardware/devices?status=decommissioned`.
       parameters:
         - $ref: "#/components/parameters/IdPath"
       requestBody:
@@ -1543,13 +1712,19 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file, name]
+              required: [file]
               properties:
                 file:
                   type: string
                   format: binary
+                  description: A .glb (binary glTF 2.0) file, up to 500 MB.
                 name:
                   type: string
+                  description: Defaults to the file name without its extension.
+                asset_type:
+                  type: string
+                  enum: [building_model, area_model]
+                  default: building_model
                 area_id:
                   type: integer
                   format: int64
@@ -1680,7 +1855,12 @@ paths:
     get:
       tags: [Assets]
       summary: Download asset version file
-      description: Dispatches the file download for a specific .glb asset version.
+      description: >-
+        Dispatches the file download for a specific .glb asset version. The
+        active version of an asset is public (the kiosk loads it); other
+        versions need an administrator session. Supports If-None-Match with the
+        version's checksum as ETag.
+      security: []
       parameters:
         - $ref: "#/components/parameters/IdPath"
         - $ref: "#/components/parameters/VersionIdPath"
@@ -1797,13 +1977,55 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /assets/{id}/deactivate:
+    post:
+      tags: [Assets]
+      summary: Take a live asset offline
+      description: >-
+        Additive (step 13). Clears the asset's active version: the kiosk,
+        attract screen and phones go back to the model bundled with the app.
+        Its versions stay and can be activated again. Recorded in the
+        activity log (`deactivate`); `seed_assets` leaves it offline.
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Asset taken offline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The asset isn't live
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /assets/{id}/activate:
     post:
       tags: [Assets]
       summary: Activate asset
-      description: Marks a validated asset as Active, integrating it into the live FlowSense system.
+      description: >-
+        Marks a validated asset as Active, integrating it into the live FlowSense
+        system. The version must have finished processing and its latest
+        validation must not have failed. Any other active model for the same
+        building is deactivated, and the model's floor group names and heights
+        are applied to the building's floors. The response adds
+        `floors_updated` and `deactivated_assets` to the asset.
       parameters:
         - $ref: "#/components/parameters/IdPath"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version_id:
+                  type: integer
+                  format: int64
+                  description: Additive. The version to activate; defaults to the latest.
       responses:
         "200":
           description: Asset activated
@@ -1976,18 +2198,40 @@ paths:
     get:
       tags: [Analytics]
       summary: List reports
-      description: Retrieves a list of previously generated PDF or CSV analytics reports.
+      description: >-
+        Retrieves a list of previously generated analytics reports, newest first
+        (without their snapshots). Implemented in step 11.
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
       responses:
         "200":
           description: List of reports
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessEnvelope"
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Report"
+                      meta:
+                        $ref: "#/components/schemas/PaginationMeta"
     post:
       tags: [Analytics]
       summary: Generate report
-      description: Triggers Celery to generate or schedule a new data report based on selected analytics parameters.
+      description: >-
+        Triggers Celery to generate a new report: a snapshot of the chosen
+        sections' figures for the period, stored in analytics.reports (added in
+        step 11, QA-65), so it reads the same whenever it's opened. Sections:
+        search, navigation, kiosks, qr, sensors, spatial, system, activity. The
+        dates are local days; the end date is included whole. `range` (any
+        AnalyticsDateRangeParam preset) may replace the dates. `schedule` is
+        refused for now ("Scheduled reports aren't available yet."). Poll
+        GET /analytics/reports/{id} until `status` is completed or failed.
       requestBody:
         required: true
         content:
@@ -2025,29 +2269,65 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessEnvelope"
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
 
   /analytics/reports/{id}:
     get:
       tags: [Analytics]
-      summary: Download report
-      description: Downloads or retrieves a specific generated report file.
+      summary: Get or download report
+      description: >-
+        Retrieves a generated report with its snapshot (`data`). Deviation
+        (step 11, team decision on QA-65): there is no server-side PDF; the
+        admin app draws the snapshot as a printable page and the browser saves
+        it as PDF. `?download=csv` returns the snapshot as a ZIP of CSV files
+        (one per table or figures block, plus 00-summary.csv); 409 until the
+        report is completed.
       parameters:
         - $ref: "#/components/parameters/IdPath"
+        - name: download
+          in: query
+          schema:
+            type: string
+            enum: [csv]
       responses:
         "200":
-          description: Report file
+          description: The report, or its CSV files
           content:
-            application/pdf:
+            application/json:
               schema:
-                type: string
-                format: binary
-            text/csv:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/Report"
+                          - type: object
+                            properties:
+                              data:
+                                type: object
+                                nullable: true
+                                description: >-
+                                  The snapshot: {format_version, title, period {start, end, label},
+                                  generated_at, generated_by, sections [{id, title, blocks}]}.
+                                  Blocks are {kind: metrics, title, items [{label, value, unit}]},
+                                  {kind: table, title, columns [{key, label, unit}], rows, empty?}
+                                  or {kind: note, text}.
+            application/zip:
               schema:
                 type: string
                 format: binary
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: The CSV was requested before the report was completed
 
   /analytics/qr:
     get:
@@ -2166,12 +2446,24 @@ paths:
     get:
       tags: [Activity]
       summary: List audit events
-      description: Retrieves the system's audit trail detailing who changed what (assets, settings, annotations) and when.
+      description: >-
+        Retrieves the system's audit trail detailing who changed what (assets,
+        settings, annotations) and when. `event_type`, `action` and
+        `entity_type` accept a comma-separated list (additive, step 10), e.g.
+        `entity_type=asset,asset_version,asset_validation` for the asset history.
       parameters:
         - name: event_type
           in: query
           schema:
             $ref: "#/components/schemas/AuditEventType"
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: entity_type
+          in: query
+          schema:
+            type: string
         - name: admin_user_id
           in: query
           schema:
@@ -2756,12 +3048,81 @@ components:
           $ref: "#/components/schemas/AreaType"
         geometry:
           $ref: "#/components/schemas/GeoJSONGeometry"
+        model:
+          $ref: "#/components/schemas/ActiveModel"
+        placement:
+          description: >-
+            Additive (step 14). Where the building's 3D model stands in the
+            campus (the kiosk building's model coordinates, glTF, metres, Y
+            up): turned rotation_y radians, then moved to position. Null: at
+            the origin (the kiosk's own building). Writable with PATCH
+            /map/areas/{id}; the building's navigation points move with it.
+          type: object
+          nullable: true
+          properties:
+            position: {type: array, items: {type: number}, minItems: 3, maxItems: 3}
+            rotation_y: {type: number}
+        map_settings:
+          description: >-
+            Additive (step 14). How the kiosk shows a building added from the
+            admin panel: exterior object names (lifted away when opened),
+            by_height groups, start (where routes into it arrive, its model's
+            coordinates) and start_label.
+          type: object
+          nullable: true
+          properties:
+            exterior: {type: array, items: {type: string}}
+            by_height: {type: array, items: {type: string}}
+            start: {type: array, items: {type: number}, minItems: 3, maxItems: 3}
+            start_label: {type: string}
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    CampusLabel:
+      type: object
+      description: Additive (step 14). A name in the kiosk's campus view.
+      properties:
+        id: {type: integer, format: int64}
+        area: {type: integer, format: int64, description: The campus area.}
+        name: {type: string}
+        geometry:
+          $ref: "#/components/schemas/GeoJSONGeometry"
+    Report:
+      type: object
+      description: An analytics report (analytics.reports, added in step 11).
+      properties:
+        id: {type: integer, format: int64}
+        title: {type: string}
+        sections: {type: array, items: {type: string}}
+        section_titles: {type: array, items: {type: string}}
+        period_start: {type: string, format: date-time}
+        period_end: {type: string, format: date-time}
+        period_label: {type: string, example: "Sep 20, 2026 to Sep 26, 2026"}
+        format: {type: string, enum: [pdf, csv]}
+        status: {type: string, enum: [pending, generating, completed, failed]}
+        error: {type: string, nullable: true}
+        format_version: {type: integer}
+        generated_by: {type: object, nullable: true}
+        created_at: {type: string, format: date-time}
+        completed_at: {type: string, format: date-time, nullable: true}
+    ActiveModel:
+      type: object
+      nullable: true
+      description: >-
+        Additive field (step 10a). The building's active model from the
+        Assets API, which the kiosk, attract screen and Map Annotation load; null
+        when none is active (the apps then use their bundled model). The URL is
+        public while the version stays active.
+      properties:
+        asset_id: {type: integer, format: int64}
+        version_id: {type: integer, format: int64}
+        version: {type: integer}
+        filename: {type: string}
+        checksum: {type: string}
+        url: {type: string, example: /api/v1/assets/1/versions/3/download}
     AreaInput:
       type: object
       required: [code, name, area_type]
@@ -2818,6 +3179,14 @@ components:
           type: number
           format: double
           nullable: true
+        display_name:
+          type: string
+          nullable: true
+          description: Additive (step 14, QA-93). What the kiosk calls the floor, e.g. "First floor".
+        short_name:
+          type: string
+          nullable: true
+          description: Additive (step 14, QA-93). The kiosk's floor button, e.g. "1F".
         navigable:
           type: boolean
         visible_in_kiosk:
@@ -3349,9 +3718,47 @@ components:
         distance:
           type: number
           format: double
+        floor_changes:
+          description: >-
+            Additive (step 12b). The stairs or lift rides along the segment, in
+            order; a lift passing floors is one ride.
+          type: array
+          items:
+            type: object
+            properties:
+              transition_type:
+                type: string
+                enum: [stairs, elevator, escalator, other]
+              from_floor_id: {type: integer, format: int64}
+              from_floor_order: {type: integer}
+              to_floor_id: {type: integer, format: int64}
+              to_floor_order: {type: integer}
+        stops:
+          description: >-
+            Additive (step 13). Where each point of the segment is, in walking
+            order, one per point of `geometry`: its node and name, building
+            or area (`area_code`, e.g. EYA, A, AUF-WALKWAYS) and floor. Clients
+            split a route between buildings by these.
+          type: array
+          items:
+            type: object
+            properties:
+              node_id: {type: integer, format: int64}
+              area_code: {type: string}
+              floor_order: {type: integer}
+              name: {type: string}
     Route:
       type: object
       properties:
+        notices:
+          description: >-
+            Additive (step 12c). What a visitor should know about a route that
+            changes floor, e.g. "The elevator is out of service." (stairs or
+            elevators switched off in Map Annotation, in any building the
+            route goes through).
+          type: array
+          items:
+            type: string
         id:
           type: integer
           format: int64
@@ -3879,6 +4286,21 @@ components:
           type: integer
           format: int64
           nullable: true
+        area:
+          type: object
+          nullable: true
+          description: Additive. The linked building's id, code and name.
+        active_version:
+          allOf: [{$ref: "#/components/schemas/AssetVersion"}]
+          nullable: true
+          description: Additive. The active version, in full.
+        latest_version:
+          allOf: [{$ref: "#/components/schemas/AssetVersion"}]
+          nullable: true
+          description: Additive. The newest version, in full.
+        version_count:
+          type: integer
+          description: Additive.
         created_at:
           type: string
           format: date-time
@@ -3990,6 +4412,24 @@ components:
           type: string
           format: date-time
           nullable: true
+        is_active:
+          type: boolean
+          description: Additive.
+        validation:
+          allOf: [{$ref: "#/components/schemas/ValidationRun"}]
+          nullable: true
+          description: Additive. The version's latest validation run, with pass/warning/error counts.
+        download_url:
+          type: string
+          description: Additive.
+        structure:
+          type: object
+          nullable: true
+          description: >-
+            Additive, only on GET /assets/{id}/versions/{version_id}. Read from the
+            file: detected floors (node, order, elevation, reason, confidence),
+            potential floors, exterior objects, extensions, and `floor_changes`
+            (what activating would change in the building's floors).
     AssetVersionResponse:
       allOf:
         - $ref: "#/components/schemas/SuccessEnvelope"

@@ -25,6 +25,7 @@ from django.utils import timezone
 
 from analytics.models import AuditEvent
 from map.models import (
+    Area,
     Edge,
     Elevator,
     Entrance,
@@ -131,6 +132,21 @@ def get_scene(*, area_id: Optional[int] = None, floor_id: Optional[int] = None) 
         transition_qs = transition_qs.filter(
             Q(from_node__floor__area_id=effective_area_id)
             | Q(to_node__floor__area_id=effective_area_id)
+        )
+
+    if floor_id is None and effective_area_id is not None and Area.objects.filter(
+        pk=effective_area_id, area_type=Area.TYPE_OUTDOOR
+    ).exists():
+        # Step 14 (additive): the campus walkways also show the buildings'
+        # points they join, and every entrance and kiosk they could join,
+        # so Map Annotation's Campus view can connect walks to buildings.
+        linked = set(edge_qs.values_list("from_node_id", flat=True)) | set(
+            edge_qs.values_list("to_node_id", flat=True)
+        )
+        node_qs = Node.objects.filter(deleted_at__isnull=True).filter(
+            Q(floor__area_id=effective_area_id)
+            | Q(pk__in=linked)
+            | Q(node_type__in=[Node.TYPE_AREA_ENTRANCE, Node.TYPE_KIOSK])
         )
 
     if effective_area_id is not None:
@@ -423,6 +439,31 @@ def delete_edge(edge: Edge, *, actor=None) -> None:
 # --------------------------------------------------------------------------
 # Node deletion (with manual cascade)
 # --------------------------------------------------------------------------
+
+
+def move_node(node: Node, *, geometry, name=None, actor=None) -> Node:
+    """
+    PATCH /annotations/nodes/{id} (additive: the API design has no node
+    update; Map Annotation needs points to be dragged into place). Moves the
+    point and redraws its connections as straight lines, so routes follow
+    the new position and their lengths stay true.
+    """
+    with transaction.atomic():
+        if geometry.srid is None:
+            geometry.srid = node.geometry.srid
+        node.geometry = geometry
+        fields = ["geometry", "updated_at"]
+        if name:
+            node.name = name
+            fields.append("name")
+        node.save(update_fields=fields)
+        for edge in Edge.objects.filter(
+            Q(from_node=node) | Q(to_node=node), deleted_at__isnull=True
+        ).select_related("from_node", "to_node"):
+            edge.geometry = _straight_line_between(edge.from_node, edge.to_node)
+            edge.save(update_fields=["geometry", "updated_at"])
+        log_annotation_change(actor=actor, action=AuditEvent.ACTION_UPDATE, instance=node)
+    return node
 
 
 def delete_node(node: Node, *, actor=None) -> None:

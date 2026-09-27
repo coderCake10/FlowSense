@@ -205,6 +205,15 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'static'
 
+# Uploaded files (building model versions from the Assets API). Kept outside
+# git; the Docker services share it through the ./backend/django mount.
+MEDIA_URL = '/media/'
+MEDIA_ROOT = Path(os.getenv('FLOWSENSE_MEDIA_ROOT', BASE_DIR / 'media'))
+# Building models may be up to 500 MB (Asset Management upload limit).
+ASSET_MAX_UPLOAD_BYTES = int(os.getenv('ASSET_MAX_UPLOAD_BYTES', 500 * 1024 * 1024))
+# Uploads larger than this stream to a temporary file instead of memory.
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

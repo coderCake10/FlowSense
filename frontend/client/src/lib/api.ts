@@ -252,6 +252,14 @@ export const endpointMap = {
   },
   annotation: {
     all: "/annotations",
+    /** Step 14 (additive): campus editing. */
+    labels: "/annotations/labels",
+    label: (id: string) => byId("/annotations/labels", id),
+    floors: "/annotations/floors",
+    floor: (id: string) => byId("/annotations/floors", id),
+    roomCreate: "/annotations/rooms/new",
+    roomRemove: (id: string) => `${byId("/annotations/rooms", id)}/remove`,
+    buildings: "/annotations/buildings",
     nodes: "/annotations/nodes",
     node: (id: string) => byId("/annotations/nodes", id),
     edges: "/annotations/edges",
@@ -301,6 +309,8 @@ export const endpointMap = {
     validation: (assetId: string) => `${byId("/assets", assetId)}/validation`,
     processing: (assetId: string) => `${byId("/assets", assetId)}/processing`,
     activate: (assetId: string) => `${byId("/assets", assetId)}/activate`,
+    /** Additive to the API design: takes the live version offline. */
+    deactivate: (assetId: string) => `${byId("/assets", assetId)}/deactivate`,
   },
   analytics: {
     dashboard: "/analytics/dashboard",

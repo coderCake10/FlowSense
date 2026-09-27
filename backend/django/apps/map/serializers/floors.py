@@ -29,6 +29,8 @@ class FloorSerializer(serializers.ModelSerializer):
             "glb_node_name",
             "floor_order",
             "elevation",
+            "display_name",
+            "short_name",
             "navigable",
             "visible_in_kiosk",
             "active",

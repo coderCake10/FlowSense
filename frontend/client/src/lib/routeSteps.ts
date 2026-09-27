@@ -2,8 +2,19 @@
  * shape: straight runs, left/right turns, floor changes, and the arrival.
  * Routes carry geometry only (no per-corner instructions), so turns come
  * from the angle between runs, seen from above. */
-import type { BuildingConfig, Destination, Point3 } from "@/data/navigation";
-import { destinationLegs } from "./mapView";
+import {
+  CAMPUS_FLOOR,
+  type BuildingConfig,
+  type Destination,
+  type Point3,
+  type RouteLeg,
+} from "@/data/navigation";
+import {
+  crossesBuildings,
+  destinationLegs,
+  legName,
+  pathLength,
+} from "./mapView";
 
 export type StepKind = "start" | "left" | "right" | "floor" | "arrive";
 
@@ -68,35 +79,70 @@ function side(a: Run, b: Run): "left" | "right" {
   return a.dx * b.dz - a.dz * b.dx > 0 ? "right" : "left";
 }
 
+/** How to change floor, when the route says. */
+export function rideDetail(via: string | undefined) {
+  if (via === "elevator") return "Take the elevator";
+  if (via === "stairs") return "Take the stairs";
+  if (via === "escalator") return "Take the escalator";
+  return "Take the stairs or the elevator";
+}
+
 const walk = (metres: number) =>
   `Walk about ${Math.max(1, Math.round(metres))} m`;
 
+/**
+ * `building`: the destination's building; `registry`: every building (a
+ * route from the kiosk to another building starts in the kiosk's, and walks
+ * outside between them).
+ */
 export function routeSteps(
   building: BuildingConfig,
-  destination: Destination
+  destination: Destination,
+  registry: readonly BuildingConfig[] = [building]
 ): RouteStep[] {
   const legs = destinationLegs(building, destination).filter(
     leg => leg.points.length >= 2
   );
   if (!legs.length) return [];
-  const floorName = (object: string) =>
-    building.model.floors.find(f => f.object === object)?.name ?? "next floor";
+  const owner = (leg: RouteLeg) =>
+    registry.find(item => item.id === leg.building) ?? building;
+  const qualified = crossesBuildings(legs);
+  const floorName = (leg: RouteLeg) =>
+    leg.floor === CAMPUS_FLOOR
+      ? "way outside"
+      : (owner(leg).model.floors.find(f => f.object === leg.floor)?.name ??
+        "next floor");
+  const where = (leg: RouteLeg) =>
+    qualified
+      ? legName(leg, building, registry, true)
+      : floorName(leg).toLowerCase();
   const steps: RouteStep[] = [];
   legs.forEach((leg, index) => {
-    const runs = runsAlong(leg.points);
+    // Outside, one step: the campus map is too rough for turn-by-turn.
+    const runs =
+      leg.floor === CAMPUS_FLOOR && index > 0
+        ? [{ dx: 0, dz: 1, metres: pathLength(leg.points) }]
+        : runsAlong(leg.points);
     runs.forEach((run, i) => {
       if (i === 0) {
         steps.push(
           index === 0
             ? {
                 kind: "start",
-                title: `Start at the ${building.startLabel.toLowerCase()}`,
+                title: `Start at the ${owner(leg).startLabel.toLowerCase()}`,
                 detail: walk(run.metres),
                 metres: run.metres,
               }
             : {
                 kind: "start",
-                title: `On the ${floorName(leg.floor).toLowerCase()}`,
+                title:
+                  leg.floor === CAMPUS_FLOOR
+                    ? leg.via === "overpass"
+                      ? `Walk to the ${owner(legs[index + 1] ?? leg).name}, crossing the highway on the overpass`
+                      : `Walk to the ${owner(legs[index + 1] ?? leg).name}`
+                    : qualified
+                      ? `In the ${where(leg)}`
+                      : `On the ${where(leg)}`,
                 detail: walk(run.metres),
                 metres: run.metres,
               }
@@ -112,12 +158,29 @@ export function routeSteps(
       });
     });
     const next = legs[index + 1];
-    if (next) {
+    if (next && next.floor === CAMPUS_FLOOR) {
+      steps.push({
+        kind: "floor",
+        title: `Leave the ${owner(leg).name}`,
+        detail: "Walk out through its exit",
+        metres: 0,
+      });
+    } else if (
+      next &&
+      (leg.floor === CAMPUS_FLOOR || owner(next).id !== owner(leg).id)
+    ) {
+      steps.push({
+        kind: "floor",
+        title: `Enter the ${owner(next).name}`,
+        detail: `At its ${owner(next).startLabel.toLowerCase()}`,
+        metres: 0,
+      });
+    } else if (next) {
       const up = next.points[0][1] > leg.points[leg.points.length - 1][1];
       steps.push({
         kind: "floor",
-        title: `Go ${up ? "up" : "down"} to the ${floorName(next.floor).toLowerCase()}`,
-        detail: "Take the stairs or the elevator",
+        title: `Go ${up ? "up" : "down"} to the ${floorName(next).toLowerCase()}`,
+        detail: rideDetail(leg.via),
         metres: 0,
       });
     }

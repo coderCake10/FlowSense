@@ -1,6 +1,10 @@
 from django.urls import path
+from rest_framework.routers import SimpleRouter
 
 from analytics import views
+
+reports = SimpleRouter(trailing_slash=True)
+reports.register("reports", views.ReportViewSet, basename="report")
 
 urlpatterns = [
     path("dashboard/", views.DashboardView.as_view(), name="analytics-dashboard"),
@@ -14,3 +18,4 @@ urlpatterns = [
     path("qr/", views.QrAnalyticsView.as_view(), name="analytics-qr"),
     path("qr/events/", views.QrEventListView.as_view(), name="analytics-qr-events"),
 ]
+urlpatterns += reports.urls

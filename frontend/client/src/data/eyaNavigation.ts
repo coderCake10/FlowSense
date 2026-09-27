@@ -6,6 +6,7 @@
  */
 import type { BuildingConfig, Destination, Point3 } from "./navigation";
 import { MODEL_FILES, modelUrl } from "./models";
+import { A_PLACEMENT } from "./aNavigation";
 export const MODEL_URL = modelUrl(MODEL_FILES.eya);
 // Lobby center, inside the entrance.
 export const START: Point3 = [0, 1.02, 28.5];
@@ -74,8 +75,6 @@ export const eyaBuilding: BuildingConfig = {
       { object: "FLOOR_5", label: "5F", name: "Fifth floor", elevation: 15.08 },
       { object: "FLOOR_6", label: "6F", name: "Sixth floor", elevation: 18.53 },
     ],
-    // All room signs are in one group; each sign follows the floor it hangs on.
-    byHeight: ["SIGNS 1-6"],
   },
   kioskFloor: "FLOOR_1",
   camera: {
@@ -90,14 +89,15 @@ export const eyaBuilding: BuildingConfig = {
   // scripts/blender/build_campus_model.py and docs/setup/building-models.md.
   campus: {
     name: "AUF Campus",
+    areaCode: "AUF",
     modelUrl: modelUrl(MODEL_FILES.campus),
     neighbours: [
       {
         name: "A Building",
+        areaCode: "A",
         modelUrl: modelUrl(MODEL_FILES.aBuilding),
-        position: [-187.7, 3.2, 76.6],
-        rotationY: 1.5708,
-        labelAt: [-187.7, 21.2, 134.6],
+        ...A_PLACEMENT,
+        labelAt: [-187.7, 21.2, 130.2],
       },
     ],
     frame: [
@@ -108,6 +108,8 @@ export const eyaBuilding: BuildingConfig = {
     landmarks: [
       { name: "Overpass", at: [-81.2, 7, 62] },
       { name: "Professional School", at: [-72.7, 18, 2.4] },
+      // The arena: the 60 × 60 m, 18 m block across the highway (mesh2194).
+      { name: "Sports and Cultural Center (SCC)", at: [-124, 23, 110.9] },
     ],
   },
 };

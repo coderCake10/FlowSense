@@ -34,6 +34,11 @@ const Analytics = lazy(() =>
     default: module.Analytics,
   }))
 );
+const ReportPage = lazy(() =>
+  import("./pages/workspaces/reports/ReportPage").then(module => ({
+    default: module.ReportPage,
+  }))
+);
 const UsersPage = lazy(() =>
   import("./pages/workspaces/UsersPage").then(module => ({
     default: module.UsersPage,
@@ -91,6 +96,9 @@ function AdminRouter() {
           <Route path="/assets" component={AssetManagement} />
           <Route path="/hardware" component={HardwareManagement} />
           <Route path="/users" component={UsersPage} />
+          <Route path="/analytics/reports/:id">
+            {params => <ReportPage id={params.id} />}
+          </Route>
           <Route path="/analytics" component={Analytics} />
           <Route path="/settings" component={SettingsPage} />
           <Route path="/help" component={HelpPage} />

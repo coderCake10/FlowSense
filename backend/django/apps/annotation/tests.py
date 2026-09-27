@@ -8,6 +8,7 @@ from io import StringIO
 from django.core.management import call_command
 from django.test import TestCase
 
+from analytics.models import AuditEvent
 from common.testing import API, data, sign_in_as_admin
 from map.models import Edge, Floor, FloorTransition, Node, Room
 from navigation.coordinates import model_to_point
@@ -29,6 +30,30 @@ class AnnotationApiTests(TestCase):
         return self.client.post(
             f"{API}/annotations/nodes/", body, content_type="application/json"
         )
+
+    def test_moving_a_point_redraws_its_connections(self):
+        a = Node.objects.create(floor=self.first, name="A", node_type=Node.TYPE_AUXILIARY,
+                                geometry=model_to_point(0, 1, 0))
+        b = Node.objects.create(floor=self.first, name="B", node_type=Node.TYPE_AUXILIARY,
+                                geometry=model_to_point(4, 1, 0))
+        edge = Edge.objects.create(from_node=a, to_node=b)
+        url = f"{API}/annotations/nodes/{b.id}/"
+        body = {"geometry": point(4, 1, 3)}
+        self.assertIn(self.client.patch(url, body, content_type="application/json").status_code, (401, 403))
+
+        sign_in_as_admin(self.client)
+        response = self.client.patch(url, body, content_type="application/json")
+        self.assertEqual(response.status_code, 200, response.content)
+        b.refresh_from_db()
+        edge.refresh_from_db()
+        self.assertEqual((round(b.geometry.x, 3), round(b.geometry.y, 3)), (4.0, -3.0))
+        # The connection follows: 5 m now (3-4-5), which routes use as its length.
+        self.assertAlmostEqual(edge.geometry.length, 5.0, places=3)
+        self.assertTrue(AuditEvent.objects.filter(entity_id=b.id, action="update").exists())
+
+        bad = self.client.patch(url, {"geometry": {"type": "LineString", "coordinates": [[0, 0, 0], [1, 1, 1]]}},
+                                content_type="application/json")
+        self.assertEqual(bad.status_code, 400)
 
     def test_annotation_needs_an_admin(self):
         response = self.place(
@@ -103,9 +128,11 @@ class AnnotationApiTests(TestCase):
         self.assertEqual(scene["edges"], [])
 
     def test_stairs_link_floors_into_one_route(self):
-        call_command("seed_eya_routes", stdout=StringIO())
         sign_in_as_admin(self.client)
-        junction = Node.objects.get(metadata__key="west-lobby")
+        junction = Node.objects.create(
+            floor=self.first, name="EYA lobby kiosk", node_type=Node.TYPE_KIOSK,
+            geometry=model_to_point(0, 1.02, 28.5),
+        )
         stairs_1 = data(self.place(floor=self.first.id, name="Stairs 1F", node_type="auxiliary", geometry=point(-4.6, 1.02, 24)))
         self.client.post(
             f"{API}/annotations/edges/",

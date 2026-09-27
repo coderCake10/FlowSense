@@ -66,6 +66,13 @@ class AreaViewSet(
             return FloorSerializer
         return AreaDetailSerializer
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        from assets.services import active_models_by_area
+
+        context["models"] = active_models_by_area()
+        return context
+
     def get_permissions(self):
         if self.action in ("create", "update", "partial_update", "destroy"):
             return [IsAdminUser()]
@@ -80,16 +87,23 @@ class AreaViewSet(
         # map.services.log_area_change(area, actor=request.admin_user,
         # action="create")), not inlined here. Not implemented yet — flagging
         # so it isn't silently forgotten.
-        return Response(AreaDetailSerializer(area).data, status=status.HTTP_201_CREATED)
+        return Response(AreaDetailSerializer(area, context=self.get_serializer_context()).data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", True)
         instance = self.get_object()
         write_serializer = self.get_serializer(instance, data=request.data, partial=partial)
         write_serializer.is_valid(raise_exception=True)
+        # Moving a building moves its navigation points with it (step 14).
+        placement_given = "placement" in write_serializer.validated_data
+        placement = write_serializer.validated_data.pop("placement", None)
         area = write_serializer.save()
+        if placement_given:
+            from map.placement import place_building
+
+            place_building(area, placement)
         # Same audit-logging note as create() above applies here.
-        return Response(AreaDetailSerializer(area).data)
+        return Response(AreaDetailSerializer(area, context=self.get_serializer_context()).data)
 
     def partial_update(self, request, *args, **kwargs):
         kwargs["partial"] = True

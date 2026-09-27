@@ -16,6 +16,7 @@ pre-warms the graph) without touching HTTP at all.
 import heapq
 import itertools
 import math
+import re
 import time
 from dataclasses import dataclass
 from decimal import Decimal
@@ -93,6 +94,7 @@ class _GraphEdge:
     to_node_id: int
     weight: float
     geometry: Optional[LineString]  # None for a synthesized floor-transition hop
+    transition_type: Optional[str] = None  # stairs, elevator, ... for a floor transition
 
 
 @dataclass
@@ -145,14 +147,17 @@ def _build_graph() -> _RoutingGraph:
     """
     nodes_by_id: Dict[int, Node] = {
         n.id: n
-        for n in Node.objects.filter(active=True, navigable=True, deleted_at__isnull=True)
+        for n in Node.objects.filter(active=True, navigable=True, deleted_at__isnull=True).select_related(
+            "floor__area"
+        )
     }
     adjacency: Dict[int, List[_GraphEdge]] = {}
 
-    def add_edge(from_id: int, to_id: int, weight: float, geometry: Optional[LineString]):
+    def add_edge(from_id: int, to_id: int, weight: float, geometry: Optional[LineString],
+                 transition_type: Optional[str] = None):
         if from_id not in nodes_by_id or to_id not in nodes_by_id:
             return
-        adjacency.setdefault(from_id, []).append(_GraphEdge(to_id, weight, geometry))
+        adjacency.setdefault(from_id, []).append(_GraphEdge(to_id, weight, geometry, transition_type))
 
     edges = Edge.objects.filter(active=True, deleted_at__isnull=True).select_related(
         "from_node", "to_node"
@@ -196,8 +201,8 @@ def _build_graph() -> _RoutingGraph:
         # Treated as bidirectional — you can take the same stairs/elevator
         # in either direction. Floor transitions have no `direction` column
         # in the schema, unlike Edge.
-        add_edge(transition.from_node_id, transition.to_node_id, weight, None)
-        add_edge(transition.to_node_id, transition.from_node_id, weight, None)
+        add_edge(transition.from_node_id, transition.to_node_id, weight, None, transition.transition_type)
+        add_edge(transition.to_node_id, transition.from_node_id, weight, None, transition.transition_type)
 
     return _RoutingGraph(nodes=nodes_by_id, adjacency=adjacency)
 
@@ -257,6 +262,54 @@ def _a_star(graph: _RoutingGraph, start_id: int, goal_id: int) -> List[int]:
                 heapq.heappush(open_heap, (tentative_g + h, neighbor_id))
 
     raise RouteNotFoundError(f"No path exists from node {start_id} to node {goal_id}.")
+
+
+def floor_changes(graph: _RoutingGraph, path_node_ids: List[int]) -> List[dict]:
+    """
+    The floor changes along a path, so the kiosk and phone can say "Take the
+    elevator up to the third floor": one entry per ride, consecutive hops of
+    the same kind merged (a lift passing the second floor is one ride).
+    Additive to the API design's segment shape.
+    """
+    changes: List[dict] = []
+    for from_id, to_id in zip(path_node_ids, path_node_ids[1:]):
+        hop = next(e for e in graph.adjacency.get(from_id, []) if e.to_node_id == to_id)
+        if hop.transition_type is None:
+            continue
+        start, end = graph.nodes[from_id].floor, graph.nodes[to_id].floor
+        last = changes[-1] if changes else None
+        if last and last["transition_type"] == hop.transition_type and last["_end_node"] == from_id:
+            last.update(to_floor_order=end.floor_order, to_floor_id=end.id, _end_node=to_id)
+            continue
+        changes.append({
+            "transition_type": hop.transition_type,
+            "from_floor_id": start.id,
+            "from_floor_order": start.floor_order,
+            "to_floor_id": end.id,
+            "to_floor_order": end.floor_order,
+            "_end_node": to_id,
+        })
+    for change in changes:
+        del change["_end_node"]
+    return changes
+
+
+def path_stops(graph: _RoutingGraph, path_node_ids: List[int]) -> List[dict]:
+    """
+    Where each point of a path is: its node (and name), building (area code)
+    and floor, in walking order, one per point of the segment's geometry. The kiosk
+    splits a route that runs between buildings by these. Additive to the API
+    design's segment shape (step 13).
+    """
+    return [
+        {
+            "node_id": node_id,
+            "area_code": graph.nodes[node_id].floor.area.code,
+            "floor_order": graph.nodes[node_id].floor.floor_order,
+            "name": graph.nodes[node_id].name,
+        }
+        for node_id in path_node_ids
+    ]
 
 
 def _leg_geometry_and_distance(
@@ -319,6 +372,8 @@ def _cache_segments(request_id: int, segments: List[dict]) -> None:
             "to_node_id": s["to_node_id"],
             "geometry": s["geometry"].geojson,
             "distance": s["distance"],
+            "floor_changes": s.get("floor_changes", []),
+            "stops": s.get("stops", []),
         }
         for s in segments
     ]
@@ -340,6 +395,8 @@ def _get_cached_segments(request_id: int) -> Optional[List[dict]]:
             "to_node_id": item["to_node_id"],
             "geometry": GEOSGeometry(item["geometry"]),
             "distance": item["distance"],
+            "floor_changes": item.get("floor_changes", []),
+            "stops": item.get("stops", []),
         }
         for item in cached
     ]
@@ -512,6 +569,8 @@ def generate_route(
                     "to_node_id": to_id,
                     "geometry": geometry,
                     "distance": leg_distance,
+                    "floor_changes": floor_changes(graph, path_node_ids),
+                    "stops": path_stops(graph, path_node_ids),
                 }
             )
             total_distance += leg_distance
@@ -603,9 +662,40 @@ def _recompute_segments(navigation_request: NavigationRequest) -> List[dict]:
                 "to_node_id": to_id,
                 "geometry": geometry,
                 "distance": leg_distance,
+                "floor_changes": floor_changes(graph, path_node_ids),
+                "stops": path_stops(graph, path_node_ids),
             }
         )
     return segments
+
+
+_FLOOR_SUFFIX = re.compile(r"\s*\(?\b\d+F\b\)?\s*$", re.I)
+
+
+def service_notices(origin_node: Optional[Node], segments: List[dict]) -> List[str]:
+    """
+    What a visitor should know about a route that changes floor: which stairs
+    or elevators in the buildings it goes through are switched off in Map
+    Annotation (out of service), since the route then goes another way.
+    Additive to the API design (step 12c).
+    """
+    if origin_node is None or not any(s.get("floor_changes") for s in segments):
+        return []
+    areas = {stop["area_code"] for s in segments for stop in s.get("stops", [])}
+    off = FloorTransition.objects.filter(deleted_at__isnull=True, active=False).select_related("from_node")
+    if areas:
+        off = off.filter(from_node__floor__area__code__in=areas)
+    else:
+        off = off.filter(from_node__floor__area_id=origin_node.floor.area_id)
+    names = []
+    for transition in off:
+        name = _FLOOR_SUFFIX.sub("", transition.from_node.name).strip() or transition.transition_type
+        if name not in names:
+            names.append(name)
+    return [
+        f"The {name[0].lower() + name[1:]} {'are' if name.lower().endswith('stairs') else 'is'} out of service."
+        for name in names
+    ]
 
 
 def _build_route_payload(navigation_request: NavigationRequest, segments: List[dict]) -> dict:
@@ -622,6 +712,7 @@ def _build_route_payload(navigation_request: NavigationRequest, segments: List[d
         "origin_node": navigation_request.origin_node,
         "destinations": destinations,
         "segments": segments,
+        "notices": service_notices(navigation_request.origin_node, segments),
         "route_distance": navigation_request.route_distance,
         "route_generation_ms": navigation_request.route_generation_ms,
         "destination_count": navigation_request.destination_count,

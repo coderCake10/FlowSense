@@ -1,151 +1,114 @@
-/* Civic Signal: operational workspace pages use AUF navy, signal gold, breathable tables, dynamic context panels, and restrained motion. */
-import { useMemo, useState } from "react";
+/* Help: short procedures for the admin pages, each linking to the page it describes. */
+import type { ReactNode } from "react";
+import { Link } from "wouter";
+import { ArrowUpRight } from "lucide-react";
 import {
-  Activity,
-  AlertTriangle,
-  ArrowUpRight,
-  Box,
-  Building2,
-  Check,
-  ChevronRight,
-  CircleHelp,
-  CloudUpload,
-  Cpu,
-  Eye,
-  FileCheck2,
-  Filter,
-  Gauge,
-  Layers3,
-  MapPin,
-  MoreHorizontal,
-  Network,
-  Pencil,
-  Plus,
-  Route,
-  Search,
-  Settings2,
-  ShieldCheck,
-  Signal,
-  Trash2,
-  Upload,
-  Users,
-  Wifi,
-  Wrench,
-  X,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import {
-  PageHeader,
-  StatusPill,
-  MetricCard,
-} from "@/components/FlowSenseShell";
-import {
-  Device,
-  DeviceStatus,
-  apiClient,
-  endpointMap,
-  isApiConfigured,
-} from "@/lib/api";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { Canvas } from "@react-three/fiber";
+import { PageHeader } from "@/components/FlowSenseShell";
 
-const devices: Device[] = [
+type Guide = {
+  title: string;
+  steps: ReactNode[];
+  page?: { href: string; label: string };
+};
+
+const guides: Guide[] = [
   {
-    id: "dev-001",
-    name: "SensorNode-1",
-    type: "Sensor",
-    location: "EYA Building · 1F",
-    status: "Unregistered",
-    lastPing: "Awaiting registration",
-    mac: "84:CC:A8:41:2F:11",
+    title: "Annotate a floor and validate route connections",
+    page: { href: "/map-annotation", label: "Open Map Annotation" },
+    steps: [
+      "Choose the building and the floor.",
+      <>
+        With <b>Corridor point</b>, click along the middle of every corridor, at
+        each corner and junction, in walking order.
+      </>,
+      <>
+        For each room in <i>Rooms on this floor</i>, pick the room, choose{" "}
+        <b>Room door</b>, and click the corridor side of its door.
+      </>,
+      <>
+        At stairs and elevators, place a corridor point, then use{" "}
+        <b>Stairs / elevator</b> to link it to the matching point on the next
+        floor.
+      </>,
+      <>
+        On the kiosk&apos;s floor, place the <b>Kiosk</b> point and connect it
+        to the corridor.
+      </>,
+      "A green tick next to a room means the kiosk can route to it. Every change saves straight away.",
+      <>
+        The EYA Building&apos;s routes come ready-made from its 3D model. To
+        adjust them: with <b>Select</b>, drag a point to move it; with{" "}
+        <b>Delete</b>, click a point to remove it or a line to remove just that
+        connection (or use <b>Remove</b> in <i>Selected point</i>).
+      </>,
+      <>
+        Elevator or stairs under maintenance? Switch it off in{" "}
+        <i>Stairs and elevators</i>: routes go another way and tell visitors
+        it&apos;s out of service.
+      </>,
+    ],
   },
   {
-    id: "dev-002",
-    name: "Main Entrance Kiosk",
-    type: "Kiosk",
-    location: "EYA Building · Main Entrance",
-    status: "Online",
-    lastPing: "10:29 AM",
-    mac: "84:CC:A8:41:2F:12",
+    title: "Register an ESP32 sensor or kiosk",
+    page: { href: "/hardware", label: "Open Hardware" },
+    steps: [
+      "Power the device on the campus network. It appears in the registry as Unregistered the first time it connects.",
+      <>
+        Select it and choose <b>Register</b>. Give it a name, pick its map node,
+        and for sensors set the sampling interval.
+      </>,
+      "Once registered, the device shows Online while it reports, and Offline when it stops.",
+      <>
+        <b>Edit</b> changes its name, building, floor, map node or interval;
+        <b> Disable</b> keeps it registered but ignored.
+      </>,
+    ],
   },
   {
-    id: "dev-003",
-    name: "EYA Kiosk-1",
-    type: "Kiosk",
-    location: "EYA Building · 1F",
-    status: "Online",
-    lastPing: "10:29 AM",
-    mac: "84:CC:A8:41:2F:13",
+    title: "Review alerts and hardware health",
+    page: { href: "/", label: "Open the Dashboard" },
+    steps: [
+      "The Dashboard lists open alerts, kiosks and sensors online, and crowd density. It refreshes every 30 seconds.",
+      <>
+        <b>Acknowledge</b> an alert you are handling; <b>Clear</b> it once
+        resolved. Informational alerts clear on their own after the time set in
+        Settings.
+      </>,
+      "A device that stops reporting raises an alert. Open Hardware to see its last contact and readings.",
+      "Analytics shows kiosk availability and sensor reliability over a chosen period.",
+    ],
   },
   {
-    id: "dev-004",
-    name: "Sensor-2",
-    type: "Sensor",
-    location: "EYA Building · 2F",
-    status: "Online",
-    lastPing: "10:29 AM",
-    mac: "84:CC:A8:41:2F:14",
-  },
-  {
-    id: "dev-005",
-    name: "Sensor-3",
-    type: "Sensor",
-    location: "EYA Building · 3F",
-    status: "Offline",
-    lastPing: "01:29 AM yesterday",
-    mac: "84:CC:A8:41:2F:15",
-  },
-  {
-    id: "dev-006",
-    name: "Sensor-4",
-    type: "Sensor",
-    location: "EYA Building · 1F",
-    status: "Disabled",
-    lastPing: "1 week ago",
-    mac: "84:CC:A8:41:2F:16",
+    title: "Publish a verified building asset",
+    page: { href: "/assets", label: "Open Asset Management" },
+    steps: [
+      <>
+        Export the building from Blender as glTF Binary (.glb) with Draco
+        compression, one group per floor named FLOOR_1, FLOOR_2, …
+      </>,
+      <>
+        Choose <b>Upload model</b>, pick the file and its building. For a newer
+        export of a building that already has a model, open that asset and
+        choose <b>Upload a new version</b>.
+      </>,
+      "FlowSense reads the model and runs its checks. Errors block activation; warnings don't.",
+      <>
+        Review the Model tab (floors found, heights) and choose <b>Make live</b>
+        . The kiosk shows it from its next load, and the building&apos;s floors
+        take their heights from the model.
+      </>,
+      <>
+        To go back, use <b>Restore</b> on an earlier version in the Asset tab.
+      </>,
+    ],
   },
 ];
-
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#8493a5]">
-      {children}
-    </p>
-  );
-}
-function MiniBar({
-  values,
-  gold = false,
-}: {
-  values: number[];
-  gold?: boolean;
-}) {
-  return (
-    <div className="flex h-28 items-end gap-2">
-      {values.map((value, i) => (
-        <div
-          key={i}
-          className="flex-1 rounded-t-md bg-[#e8eef5]"
-          style={{ height: `${Math.max(value, 8)}%` }}
-        >
-          <div
-            className={cn(
-              "h-full rounded-t-md",
-              gold ? "bg-[#f4c542]" : "bg-[#345a87]"
-            )}
-            style={{ opacity: 0.65 + (i / values.length) * 0.35 }}
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function HelpPage() {
   return (
@@ -160,23 +123,37 @@ export function HelpPage() {
           <CardHeader>
             <CardTitle className="font-display text-lg">Quick guides</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              "Annotate a floor and validate route connections",
-              "Register an ESP32 sensor or kiosk",
-              "Review alerts and hardware health",
-              "Publish a verified building asset",
-            ].map((item, i) => (
-              <button
-                key={item}
-                className="flex w-full items-center justify-between rounded-xl border border-[#e5ebf2] p-4 text-left text-sm font-semibold text-[#17365d] hover:bg-[#fffaf0]"
-              >
-                <span>
-                  {i + 1}. {item}
-                </span>
-                <ChevronRight size={16} className="text-[#b08412]" />
-              </button>
-            ))}
+          <CardContent>
+            <Accordion type="single" collapsible className="space-y-3">
+              {guides.map((guide, i) => (
+                <AccordionItem
+                  key={guide.title}
+                  value={guide.title}
+                  className="rounded-xl border border-[#e5ebf2] px-4 last:border-b"
+                >
+                  <AccordionTrigger className="text-left text-sm font-semibold text-[#17365d] hover:no-underline">
+                    {i + 1}. {guide.title}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-sm leading-6 text-[#52657a]">
+                    {guide.steps.length > 0 && (
+                      <ol className="mb-3 list-decimal space-y-1 pl-5">
+                        {guide.steps.map((step, n) => (
+                          <li key={n}>{step}</li>
+                        ))}
+                      </ol>
+                    )}
+                    {guide.page && (
+                      <Link
+                        href={guide.page.href}
+                        className="inline-flex items-center gap-1 font-semibold text-[#17365d] underline-offset-4 hover:underline"
+                      >
+                        {guide.page.label} <ArrowUpRight size={14} />
+                      </Link>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           </CardContent>
         </Card>
         <Card className="border-[#dbe3ed]">
@@ -185,22 +162,15 @@ export function HelpPage() {
               Need technical help?
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm leading-6 text-[#718398]">
-              Use the system manual for administrator procedures, MQTT device
-              topics, sensor placement, and troubleshooting guidance.
+          <CardContent className="space-y-3 text-sm leading-6 text-[#718398]">
+            <p>
+              The full system manual covers administrator procedures, MQTT
+              device topics, sensor placement, and troubleshooting.
             </p>
-            <Button
-              className="mt-5 bg-[#17365d] text-white hover:bg-[#102c4d]"
-              onClick={() =>
-                toast.message("Manual download", {
-                  description:
-                    "The PDF manual will be available after deployment.",
-                })
-              }
-            >
-              Open PDF manual
-            </Button>
+            <p className="rounded-xl border border-dashed border-[#dbe3ed] p-4 text-[#52657a]">
+              The PDF manual isn&apos;t published yet. Until it is, contact the
+              FlowSense development team for help.
+            </p>
           </CardContent>
         </Card>
       </div>

@@ -18,18 +18,21 @@ export function RouteSketch({
         {destination.floor.toLowerCase()} and follow the room signs.
       </p>
     );
-  const framePoints = [
-    building.start,
-    ...building.destinations.flatMap(item => item.points),
-  ];
+  // Routes are in campus coordinates. Into another building (from the
+  // kiosk's), the sketch frames the whole walk and starts at the kiosk.
+  const away = !!building.placement;
+  const origin = away ? destination.points[0] : building.start;
+  const framePoints = away
+    ? destination.points
+    : [building.start, ...building.destinations.flatMap(item => item.points)];
   const route = projectRoute(destination.points, framePoints, FRAME);
-  const [start] = projectRoute([building.start], framePoints, FRAME);
+  const [start] = projectRoute([origin], framePoints, FRAME);
   const end = route[route.length - 1];
   return (
     <svg
       viewBox={`0 0 ${FRAME.width} ${FRAME.height}`}
       role="img"
-      aria-label={`Route sketch from the ${building.startLabel.toLowerCase()} to ${destination.code}`}
+      aria-label={`Route sketch from the ${away ? "kiosk" : building.startLabel.toLowerCase()} to ${destination.code}`}
       className="h-auto w-full rounded-xl border border-[#dbe3ed] bg-[#f7f9fc]"
     >
       <polyline

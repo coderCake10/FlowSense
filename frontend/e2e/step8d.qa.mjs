@@ -34,7 +34,7 @@ const kiosk = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 kiosk.on("pageerror", e => errors.push(`kiosk: ${e.message}`));
 await kiosk.goto(`${BASE}/kiosk`);
 await kiosk
-  .getByText(/^92 Destinations · by floor$/)
+  .getByText(/^97 Destinations · by floor$/)
   .waitFor({ timeout: 60000 });
 const routeReply = kiosk
   .waitForResponse(
@@ -64,9 +64,21 @@ await kiosk
 await kiosk.getByRole("button", { name: /^Navigate$/ }).click();
 const qr = kiosk.getByRole("dialog").locator("svg[data-handoff-url]");
 await qr.waitFor({ timeout: 15000 });
-const link = new URL(await qr.getAttribute("data-handoff-url"));
-const payload = JSON.parse(
-  Buffer.from(link.searchParams.get("h"), "base64url").toString()
+// The QR gains the server's session a moment after it appears.
+let link, payload;
+for (let i = 0; i < 20; i++) {
+  link = new URL(await qr.getAttribute("data-handoff-url"));
+  payload = JSON.parse(
+    Buffer.from(link.searchParams.get("h"), "base64url").toString()
+  );
+  if (payload.q) break;
+  await kiosk.waitForTimeout(500);
+}
+check(
+  "H2b",
+  "The QR carries a QR Sessions API session (the server counts it as shown)",
+  Array.isArray(payload.q) && payload.q.length === 2,
+  payload.q ? `session ${payload.q[0]}` : "none"
 );
 check(
   "H2",
@@ -121,6 +133,18 @@ await phone.screenshot({
   path: `${OUT}/step8d-directions.png`,
   fullPage: true,
 });
+check(
+  "H5b",
+  "The phone reported the scan: the kiosk says it opened on the phone",
+  await kiosk
+    .getByText("Opened on your phone")
+    .first()
+    .waitFor({ timeout: 15000 })
+    .then(
+      () => true,
+      () => false
+    )
+);
 
 await phone.getByRole("button", { name: /I've arrived/ }).click();
 const dialog = phone.getByRole("dialog");

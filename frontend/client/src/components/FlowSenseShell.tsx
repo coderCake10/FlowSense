@@ -13,7 +13,6 @@ import {
   Map,
   Menu,
   Settings2,
-  ShieldCheck,
   Users,
   Wifi,
   X,
@@ -241,7 +240,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-[#f7f9fc] text-[#102c4d]">
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[244px] -translate-x-full flex-col bg-[#0b1f3a] px-4 py-5 transition-transform duration-200 lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex w-[244px] -translate-x-full flex-col bg-[#0b1f3a] px-4 py-5 transition-transform duration-200 lg:translate-x-0 print:hidden",
           open && "translate-x-0"
         )}
       >
@@ -279,20 +278,25 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="mt-auto space-y-1 border-t border-white/10 pt-4">
-          <Link
-            href="/settings"
-            className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/55 transition hover:bg-white/8 hover:text-white"
-          >
-            <Settings2 size={17} />
-            Settings
-          </Link>
-          <Link
-            href="/help"
-            className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/55 transition hover:bg-white/8 hover:text-white"
-          >
-            <CircleHelp size={17} />
-            Help & manual
-          </Link>
+          {[
+            { label: "Settings", href: "/settings", icon: Settings2 },
+            { label: "Help & manual", href: "/help", icon: CircleHelp },
+          ].map(({ label, href, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setOpen(false)}
+              className={cn(
+                "flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white/55 transition hover:bg-white/8 hover:text-white",
+                // Highlighted like the main links while in use.
+                active(href) &&
+                  "border-l-4 border-[#f4c542] bg-[#f4c542] font-semibold text-[#0b1f3a] shadow-[0_8px_20px_rgba(244,197,66,0.18)] hover:bg-[#f4c542] hover:text-[#0b1f3a]"
+              )}
+            >
+              <Icon size={17} strokeWidth={active(href) ? 2.4 : 1.8} />
+              {label}
+            </Link>
+          ))}
           <div className="relative mt-4">
             <button
               onClick={() => setProfileOpen(!profileOpen)}
@@ -380,8 +384,8 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <div className="lg:pl-[244px]">
-        <header className="sticky top-0 z-30 flex h-[68px] items-center justify-between border-b border-[#dbe3ed]/90 bg-[#f7f9fc]/90 px-5 backdrop-blur-md lg:px-9">
+      <div className="lg:pl-[244px] print:!pl-0">
+        <header className="print:hidden sticky top-0 z-30 flex h-[68px] items-center justify-between border-b border-[#dbe3ed]/90 bg-[#f7f9fc]/90 px-5 backdrop-blur-md lg:px-9">
           <button
             className="rounded-lg p-2 text-[#17365d] hover:bg-[#e9eef5] lg:hidden"
             onClick={() => setOpen(true)}
@@ -415,7 +419,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="p-5 lg:p-9">{children}</main>
+        <main className="p-5 lg:p-9 print:!p-0">{children}</main>
       </div>
       {profileModalOpen && (
         <div className="fixed inset-0 z-[80] grid place-items-center bg-[#07182d99] p-5">

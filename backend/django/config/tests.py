@@ -67,6 +67,7 @@ class CheckConstraintDriftTests(TestCase):
                 if not constraint.name.startswith("chk_") or constraint.name in (
                     "chk_edge_nodes_different",
                     "chk_semesters_date_range",
+                    "chk_reports_period",
                 ):
                     continue
                 lookup, values = next(
@@ -76,4 +77,4 @@ class CheckConstraintDriftTests(TestCase):
                 with self.subTest(constraint=constraint.name):
                     self.assertEqual(sorted(values), sorted(value for value, _ in field.choices))
                 checked += 1
-        self.assertEqual(checked, 22)
+        self.assertEqual(checked, 24)  # 22 from the spec + analytics.reports' status and format

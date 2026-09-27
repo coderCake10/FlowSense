@@ -110,3 +110,13 @@ button:active:not(:disabled) {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Printed analytics reports (Analytics › Reports and exports). */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  body {
+    background: white;
+  }
+}

@@ -132,7 +132,8 @@ def _summary():
     rooms = Room.objects.filter(deleted_at__isnull=True)
     return {
         "buildings": Area.objects.filter(area_type=Area.TYPE_BUILDING, deleted_at__isnull=True).count(),
-        "floors": Floor.objects.filter(deleted_at__isnull=True).count(),
+        # Buildings' floors (not the walkways' outdoor level).
+        "floors": Floor.objects.filter(deleted_at__isnull=True, area__area_type=Area.TYPE_BUILDING).count(),
         "rooms": rooms.count(),
         "mapped_rooms": rooms.filter(geometry__isnull=False).count(),
         "assets": Asset.objects.filter(deleted_at__isnull=True).count(),

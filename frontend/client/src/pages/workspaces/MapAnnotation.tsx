@@ -11,13 +11,16 @@ import {
   DoorOpen,
   Footprints,
   Link2,
+  LogIn,
   Monitor,
+  Plus,
   MousePointer2,
   RotateCcw,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/FlowSenseShell";
 import {
@@ -27,11 +30,21 @@ import {
   SectionLabel,
 } from "@/components/AdminBits";
 import { AnnotationCanvas } from "@/components/map/AnnotationCanvas";
-import { buildings } from "@/data/buildings";
+import { useBuildingRegistry } from "@/lib/buildingRegistry";
+import { CampusEditor } from "./annotation/CampusEditor";
+import {
+  AddBuildingDialog,
+  AddRoomForm,
+  FloorSettings,
+  RemoveRoomButton,
+} from "./annotation/BuildingPanels";
 import type { Point3 } from "@/data/navigation";
 import { isApiConfigured } from "@/lib/api";
 import {
   NODE_COLORS,
+  serviceGroups,
+  useAllAreas,
+  useCampusEdits,
   useAreaFloors,
   useAreaRooms,
   useBuildingAreas,
@@ -51,6 +64,7 @@ type Tool =
   | "room"
   | "corridor"
   | "kiosk"
+  | "entrance"
   | "connect"
   | "link"
   | "delete";
@@ -61,7 +75,7 @@ const TOOLS: { id: Tool; label: string; icon: typeof Circle; help: string }[] =
       id: "select",
       label: "Select",
       icon: MousePointer2,
-      help: "Click a point to see its connections.",
+      help: "Click a point to see its connections. Drag a point to move it.",
     },
     {
       id: "room",
@@ -82,6 +96,12 @@ const TOOLS: { id: Tool; label: string; icon: typeof Circle; help: string }[] =
       help: "Click where the kiosk stands. Routes start here.",
     },
     {
+      id: "entrance",
+      label: "Entrance",
+      icon: LogIn,
+      help: "Click just inside the building's entrance. Connect it to the corridor, and to the walk outside if routes come from another building.",
+    },
+    {
       id: "connect",
       label: "Connect",
       icon: Link2,
@@ -97,9 +117,12 @@ const TOOLS: { id: Tool; label: string; icon: typeof Circle; help: string }[] =
       id: "delete",
       label: "Delete",
       icon: Trash2,
-      help: "Click a point to delete it and its connections.",
+      help: "Click a point to delete it and its connections, or click a line to delete just that connection.",
     },
   ];
+
+/** Tools that place points (and chain them in walking order). */
+const PLACING: Tool[] = ["corridor", "kiosk", "entrance", "room"];
 
 const NODE_TYPE_LABELS: Record<NodeType, string> = {
   room: "Room door",
@@ -222,10 +245,24 @@ function RoomFields({ areaId, room }: { areaId: number; room: RoomDetails }) {
 export function MapAnnotation() {
   const live = isApiConfigured();
   const areas = useBuildingAreas();
-  const modelled = (areas.data ?? []).filter(area =>
-    buildings.some(b => b.areaCode === area.code)
-  );
+  const { buildings } = useBuildingRegistry();
+  // In the kiosk's order: its own building first.
+  const rank = (code: string) => buildings.findIndex(b => b.areaCode === code);
+  const modelled = (areas.data ?? [])
+    .filter(area => rank(area.code) >= 0)
+    .sort((a, b) => rank(a.code) - rank(b.code));
   const [chosenArea, setChosenArea] = useState<number | null>(null);
+  // Step 14: the campus (walks between buildings, labels, placing
+  // buildings), and buildings added here that wait for their model.
+  const [campusMode, setCampusMode] = useState(false);
+  const [addingBuilding, setAddingBuilding] = useState(false);
+  const allAreas = useAllAreas();
+  const campusEdits = useCampusEdits();
+  const walkways =
+    (allAreas.data ?? []).find(a => a.area_type === "outdoor") ?? null;
+  const waitingAreas = (allAreas.data ?? []).filter(
+    a => a.area_type === "building" && rank(a.code) < 0
+  );
   const area = modelled.find(a => a.id === chosenArea) ?? modelled[0] ?? null;
   const building = area
     ? buildings.find(b => b.areaCode === area.code)
@@ -234,8 +271,8 @@ export function MapAnnotation() {
     (a, b) => a.floor_order - b.floor_order
   );
   const rooms = useAreaRooms(area?.id ?? null);
-  const graph = useGraph(area?.id ?? null);
-  const edits = useGraphEdits(area?.id ?? null);
+  const graph = useGraph(area?.id ?? null, building?.placement);
+  const edits = useGraphEdits(area?.id ?? null, building?.placement);
 
   const [chosenFloor, setChosenFloor] = useState<number | null>(null);
   const floor = floors.find(f => f.id === chosenFloor) ?? floors[0] ?? null;
@@ -243,10 +280,11 @@ export function MapAnnotation() {
     floor?.glb_node_name ??
     building?.model.floors[(floor?.floor_order ?? 1) - 1]?.object;
   const modelFloor = building?.model.floors.find(f => f.object === floorObject);
+  // The walking surface: the building's configured height (the model's
+  // measured lowest point, set on activation, can sit below the slab).
   const elevation =
-    floor?.elevation != null
-      ? Number(floor.elevation)
-      : (modelFloor?.elevation ?? 0);
+    modelFloor?.elevation ??
+    (floor?.elevation != null ? Number(floor.elevation) : 0);
 
   const [tool, setTool] = useState<Tool>("select");
   const [topDown, setTopDown] = useState(true);
@@ -257,6 +295,12 @@ export function MapAnnotation() {
   const [previousId, setPreviousId] = useState<number | null>(null);
   const [linkType, setLinkType] = useState<TransitionType>("stairs");
   const [roomFilter, setRoomFilter] = useState("");
+  // Hardware's "View on map" links here with ?node=<id>: open that node's
+  // floor and select it once the graph has loaded.
+  const [requestedNode, setRequestedNode] = useState<number | null>(() => {
+    const id = Number(new URLSearchParams(window.location.search).get("node"));
+    return Number.isInteger(id) && id > 0 ? id : null;
+  });
 
   const nodes = useMemo(() => graph.data?.nodes ?? [], [graph.data]);
   const byId = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes]);
@@ -269,6 +313,9 @@ export function MapAnnotation() {
       : [];
   });
   const transitions = graph.data?.transitions ?? [];
+  const services = serviceGroups(transitions, id =>
+    id === null ? undefined : nodes.find(n => n.id === id)?.name
+  );
   const linked = new Set(
     transitions
       .flatMap(t => [t.from_node, t.to_node])
@@ -282,6 +329,18 @@ export function MapAnnotation() {
         .includes(roomFilter.toLowerCase())
     );
   const selected = selectedId !== null ? (byId.get(selectedId) ?? null) : null;
+
+  const [requestedMissing, setRequestedMissing] = useState(false);
+  if (requestedNode !== null && graph.data) {
+    const node = byId.get(requestedNode);
+    setRequestedNode(null);
+    if (node) {
+      setChosenFloor(node.floor);
+      setSelectedId(node.id);
+    } else {
+      setRequestedMissing(true);
+    }
+  }
   // The room being placed, or the room whose door point is selected.
   const detailsRoomId = roomToPlace ?? selected?.room ?? null;
   const busy = Object.values(edits).some(edit => edit.isPending);
@@ -289,8 +348,7 @@ export function MapAnnotation() {
   const chooseTool = (next: Tool) => {
     setTool(next);
     setPendingId(null);
-    if (next !== "corridor" && next !== "kiosk" && next !== "room")
-      setPreviousId(null);
+    if (!PLACING.includes(next)) setPreviousId(null);
     if (next !== "room") setRoomToPlace(null);
   };
   const place = async (
@@ -328,6 +386,19 @@ export function MapAnnotation() {
       );
     } else if (tool === "kiosk") {
       void place("kiosk", point, "Kiosk");
+    } else if (tool === "entrance") {
+      // A building added from the admin panel: routes into it arrive here
+      // (the kiosk marks it). The bundled buildings keep theirs.
+      if (building?.id.startsWith("area-") && area)
+        campusEdits.setEntrance.mutate({
+          areaId: area.id,
+          start: [point[0], elevation + ABOVE_FLOOR, point[2]],
+        });
+      void place(
+        "area_entrance",
+        point,
+        `${building?.name ?? "Building"} entrance`
+      );
     } else if (tool === "room" && roomToPlace !== null) {
       const room = rooms.data?.find(r => r.id === roomToPlace);
       if (room) void place("room", point, `${room.room_code} door`, room.id);
@@ -345,7 +416,7 @@ export function MapAnnotation() {
       if (previousId === node.id) setPreviousId(null);
       return;
     }
-    if (tool === "corridor" || tool === "kiosk" || tool === "room") {
+    if (PLACING.includes(tool)) {
       // Continue the chain from an existing point (and join it up).
       if (previousId && previousId !== node.id)
         edits.connect.mutate({ from: previousId, to: node.id });
@@ -423,9 +494,11 @@ export function MapAnnotation() {
                   <Building2 size={14} /> Building
                   <NativeSelect
                     aria-label="Building"
-                    value={area.id}
+                    value={campusMode ? "campus" : area.id}
                     onChange={e => {
-                      setChosenArea(Number(e.target.value));
+                      setCampusMode(e.target.value === "campus");
+                      if (e.target.value !== "campus")
+                        setChosenArea(Number(e.target.value));
                       setChosenFloor(null);
                       setSelectedId(null);
                       setPreviousId(null);
@@ -436,9 +509,28 @@ export function MapAnnotation() {
                         {a.name}
                       </option>
                     ))}
+                    {waitingAreas.map(a => (
+                      <option key={a.id} value={a.id} disabled>
+                        {a.name} (upload its model first)
+                      </option>
+                    ))}
+                    {walkways && (
+                      <option value="campus">Campus (outdoors)</option>
+                    )}
                   </NativeSelect>
                 </label>
-                <div role="group" aria-label="Floor" className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAddingBuilding(true)}
+                >
+                  <Plus size={14} className="mr-1" /> Add building
+                </Button>
+                <div
+                  role="group"
+                  aria-label="Floor"
+                  className={cn("flex gap-1", campusMode && "hidden")}
+                >
                   {floors.map(f => {
                     const label =
                       building.model.floors.find(
@@ -492,40 +584,47 @@ export function MapAnnotation() {
                   <RotateCcw size={14} className="mr-1" /> Reset view
                 </Button>
               </div>
-              {/* Fixed height: panels scroll on their own, so the map never resizes
-                  (and re-frames) while someone is annotating. */}
-              <div className="grid grid-cols-1 lg:h-[680px] lg:grid-cols-[200px_minmax(0,1fr)_300px]">
-                <aside className="space-y-1 border-b border-[#dbe3ed] p-3 lg:overflow-y-auto lg:border-b-0 lg:border-r">
-                  <SectionLabel>Tools</SectionLabel>
-                  {TOOLS.map(({ id, label, icon: Icon }) => (
-                    <button
-                      key={id}
-                      aria-pressed={tool === id}
-                      onClick={() => chooseTool(id)}
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#17365d] hover:bg-[#f3f6fa]",
-                        tool === id && "bg-[#fdf3d0]"
-                      )}
-                    >
-                      <Icon size={15} /> {label}
-                    </button>
-                  ))}
-                  {tool === "link" && (
-                    <NativeSelect
-                      aria-label="Link type"
-                      value={linkType}
-                      onChange={e =>
-                        setLinkType(e.target.value as TransitionType)
-                      }
-                    >
-                      <option value="stairs">Stairs</option>
-                      <option value="elevator">Elevator</option>
-                    </NativeSelect>
-                  )}
-                  {(tool === "corridor" ||
-                    tool === "kiosk" ||
-                    tool === "room") &&
-                    previousId && (
+              {campusMode ? (
+                <CampusEditor
+                  host={buildings[0]}
+                  registry={buildings}
+                  areas={[...modelled, ...waitingAreas]}
+                  walkwaysAreaId={walkways?.id ?? null}
+                  topDown={topDown}
+                  resetKey={resetKey}
+                />
+              ) : (
+                /* Fixed height: panels scroll on their own, so the map never resizes
+                  (and re-frames) while someone is annotating. */
+                <div className="grid grid-cols-1 lg:h-[680px] lg:grid-cols-[200px_minmax(0,1fr)_300px]">
+                  <aside className="space-y-1 border-b border-[#dbe3ed] p-3 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+                    <SectionLabel>Tools</SectionLabel>
+                    {TOOLS.map(({ id, label, icon: Icon }) => (
+                      <button
+                        key={id}
+                        aria-pressed={tool === id}
+                        onClick={() => chooseTool(id)}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#17365d] hover:bg-[#f3f6fa]",
+                          tool === id && "bg-[#fdf3d0]"
+                        )}
+                      >
+                        <Icon size={15} /> {label}
+                      </button>
+                    ))}
+                    {tool === "link" && (
+                      <NativeSelect
+                        aria-label="Link type"
+                        value={linkType}
+                        onChange={e =>
+                          setLinkType(e.target.value as TransitionType)
+                        }
+                      >
+                        <option value="stairs">Stairs</option>
+                        <option value="elevator">Elevator</option>
+                      </NativeSelect>
+                    )}
+                    {PLACING.includes(tool) && previousId && (
                       <button
                         onClick={() => setPreviousId(null)}
                         className="mt-2 w-full rounded-lg border border-[#dbe3ed] px-3 py-2 text-xs text-[#52657a]"
@@ -533,226 +632,333 @@ export function MapAnnotation() {
                         Start a new line
                       </button>
                     )}
-                  <div className="mt-4 space-y-1.5 border-t border-[#dbe3ed] pt-3 text-[11px] text-[#52657a]">
-                    {(Object.keys(NODE_TYPE_LABELS) as NodeType[])
-                      .filter(
-                        type => type !== "sensor" && type !== "area_entrance"
-                      )
-                      .map(type => (
-                        <p key={type} className="flex items-center gap-2">
-                          <span
-                            className="size-2.5 rounded-full"
-                            style={{ background: NODE_COLORS[type] }}
-                          />
-                          {NODE_TYPE_LABELS[type]}
-                        </p>
-                      ))}
-                    <p className="flex items-center gap-2">
-                      <span className="size-2.5 rounded-full border-2 border-[#7c3aed]" />
-                      Linked to another floor
+                    <div className="mt-4 space-y-1.5 border-t border-[#dbe3ed] pt-3 text-[11px] text-[#52657a]">
+                      {(Object.keys(NODE_TYPE_LABELS) as NodeType[])
+                        .filter(type => type !== "sensor")
+                        .map(type => (
+                          <p key={type} className="flex items-center gap-2">
+                            <span
+                              className="size-2.5 rounded-full"
+                              style={{ background: NODE_COLORS[type] }}
+                            />
+                            {NODE_TYPE_LABELS[type]}
+                          </p>
+                        ))}
+                      <p className="flex items-center gap-2">
+                        <span className="size-2.5 rounded-full border-2 border-[#7c3aed]" />
+                        Linked to another floor
+                      </p>
+                    </div>
+                  </aside>
+                  <div className="relative h-[520px] lg:h-full">
+                    {floorObject && (
+                      <AnnotationCanvas
+                        building={building}
+                        floor={floorObject}
+                        elevation={elevation}
+                        topDown={topDown}
+                        nodes={onFloor}
+                        edges={edgesOnFloor}
+                        linked={linked}
+                        selectedId={selectedId}
+                        pendingId={pendingId}
+                        onFloorClick={onFloorClick}
+                        onNodeClick={onNodeClick}
+                        onEdgeClick={
+                          tool === "delete"
+                            ? id => {
+                                if (!busy) edits.disconnect.mutate(id);
+                              }
+                            : undefined
+                        }
+                        dragEnabled={tool === "select"}
+                        onNodeMove={(node, position) => {
+                          setSelectedId(node.id);
+                          edits.moveNode.mutate({ id: node.id, position });
+                        }}
+                        resetKey={resetKey}
+                      />
+                    )}
+                    <p
+                      role="status"
+                      className="absolute bottom-3 left-3 right-3 rounded-lg bg-white/95 px-3 py-2 text-xs text-[#52657a] shadow"
+                    >
+                      {tool === "room" && roomToPlace !== null
+                        ? `Click the corridor side of ${rooms.data?.find(r => r.id === roomToPlace)?.room_code}'s door.`
+                        : tool === "link" && pendingNode
+                          ? `Linking from ${pendingNode.name} (${building.model.floors.find(m => m.object === floorOf(pendingNode.id)?.glb_node_name)?.label ?? ""}). Switch floors and click the matching point.`
+                          : help}
                     </p>
                   </div>
-                </aside>
-                <div className="relative h-[520px] lg:h-full">
-                  {floorObject && (
-                    <AnnotationCanvas
-                      building={building}
-                      floor={floorObject}
-                      elevation={elevation}
-                      topDown={topDown}
-                      nodes={onFloor}
-                      edges={edgesOnFloor}
-                      linked={linked}
-                      selectedId={selectedId}
-                      pendingId={pendingId}
-                      onFloorClick={onFloorClick}
-                      onNodeClick={onNodeClick}
-                      resetKey={resetKey}
-                    />
-                  )}
-                  <p
-                    role="status"
-                    className="absolute bottom-3 left-3 right-3 rounded-lg bg-white/95 px-3 py-2 text-xs text-[#52657a] shadow"
-                  >
-                    {tool === "room" && roomToPlace !== null
-                      ? `Click the corridor side of ${rooms.data?.find(r => r.id === roomToPlace)?.room_code}'s door.`
-                      : tool === "link" && pendingNode
-                        ? `Linking from ${pendingNode.name} (${building.model.floors.find(m => m.object === floorOf(pendingNode.id)?.glb_node_name)?.label ?? ""}). Switch floors and click the matching point.`
-                        : help}
-                  </p>
-                </div>
-                <aside className="space-y-4 border-t border-[#dbe3ed] p-3 lg:overflow-y-auto lg:border-l lg:border-t-0">
-                  <Panel title={`Rooms on this floor (${floorRooms.length})`}>
-                    <input
-                      aria-label="Filter rooms"
-                      value={roomFilter}
-                      onChange={e => setRoomFilter(e.target.value)}
-                      placeholder="Filter by code or name"
-                      className="mb-2 h-8 w-full rounded-md border border-[#dbe3ed] px-2 text-xs"
-                    />
-                    <ul className="max-h-72 space-y-1 overflow-y-auto">
-                      {floorRooms.map(room => {
-                        const placed = room.node_id !== null;
-                        return (
-                          <li key={room.id}>
-                            <button
-                              aria-label={`${room.room_code} ${placed ? "placed" : "not placed"}`}
-                              onClick={() => {
-                                if (placed) {
-                                  chooseTool("select");
-                                  setSelectedId(room.node_id);
-                                } else {
-                                  setTool("room");
-                                  setPendingId(null);
-                                  setRoomToPlace(room.id);
-                                }
-                              }}
-                              className={cn(
-                                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[#f3f6fa]",
-                                roomToPlace === room.id && "bg-[#fdf3d0]"
-                              )}
-                            >
-                              {placed ? (
-                                <CheckCircle2
-                                  size={14}
-                                  className="shrink-0 text-[#168051]"
-                                />
-                              ) : (
-                                <Circle
-                                  size={14}
-                                  className="shrink-0 text-[#a3b0bf]"
-                                />
-                              )}
-                              <span className="font-bold text-[#17365d]">
-                                {room.room_code}
-                              </span>
-                              <span className="truncate text-[#718398]">
-                                {room.room_alias}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </Panel>
-                  <Panel title="Room details">
-                    {detailsRoomId !== null ? (
-                      <RoomDetailsForm
-                        key={detailsRoomId}
-                        areaId={area.id}
-                        roomId={detailsRoomId}
+                  <aside className="space-y-4 border-t border-[#dbe3ed] p-3 lg:overflow-y-auto lg:border-l lg:border-t-0">
+                    <Panel title={`Rooms on this floor (${floorRooms.length})`}>
+                      <input
+                        aria-label="Filter rooms"
+                        value={roomFilter}
+                        onChange={e => setRoomFilter(e.target.value)}
+                        placeholder="Filter by code or name"
+                        className="mb-2 h-8 w-full rounded-md border border-[#dbe3ed] px-2 text-xs"
                       />
-                    ) : (
-                      <p className="text-xs text-[#718398]">
-                        Pick a room above, or click a room's door point, to edit
-                        its number, name and purpose.
-                      </p>
-                    )}
-                  </Panel>
-                  <Panel title="Selected point">
-                    {selected ? (
-                      <div className="space-y-2 text-xs text-[#52657a]">
-                        <p className="font-bold text-[#17365d]">
-                          {selected.name}
+                      <ul className="max-h-72 space-y-1 overflow-y-auto">
+                        {floorRooms.map(room => {
+                          const placed = room.node_id !== null;
+                          return (
+                            <li key={room.id}>
+                              <button
+                                aria-label={`${room.room_code} ${placed ? "placed" : "not placed"}`}
+                                onClick={() => {
+                                  if (placed) {
+                                    chooseTool("select");
+                                    setSelectedId(room.node_id);
+                                  } else {
+                                    setTool("room");
+                                    setPendingId(null);
+                                    setRoomToPlace(room.id);
+                                  }
+                                }}
+                                className={cn(
+                                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[#f3f6fa]",
+                                  roomToPlace === room.id && "bg-[#fdf3d0]"
+                                )}
+                              >
+                                {placed ? (
+                                  <CheckCircle2
+                                    size={14}
+                                    className="shrink-0 text-[#168051]"
+                                  />
+                                ) : (
+                                  <Circle
+                                    size={14}
+                                    className="shrink-0 text-[#a3b0bf]"
+                                  />
+                                )}
+                                <span className="font-bold text-[#17365d]">
+                                  {room.room_code}
+                                </span>
+                                <span className="truncate text-[#718398]">
+                                  {room.room_alias}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {floor && <AddRoomForm floorId={floor.id} />}
+                    </Panel>
+                    <Panel title="Room details">
+                      {detailsRoomId !== null ? (
+                        <>
+                          <RoomDetailsForm
+                            key={detailsRoomId}
+                            areaId={area.id}
+                            roomId={detailsRoomId}
+                          />
+                          <RemoveRoomButton
+                            roomId={detailsRoomId}
+                            code={
+                              rooms.data?.find(r => r.id === detailsRoomId)
+                                ?.room_code ?? "this room"
+                            }
+                            onRemoved={() => {
+                              setRoomToPlace(null);
+                              setSelectedId(null);
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <p className="text-xs text-[#718398]">
+                          Pick a room above, or click a room's door point, to
+                          edit its number, name and purpose.
                         </p>
-                        <p>{NODE_TYPE_LABELS[selected.node_type]}</p>
-                        <p>
-                          Connected to:{" "}
-                          {(graph.data?.edges ?? [])
-                            .filter(
+                      )}
+                    </Panel>
+                    <Panel title="Selected point">
+                      {selected ? (
+                        <div className="space-y-2 text-xs text-[#52657a]">
+                          <p className="font-bold text-[#17365d]">
+                            {selected.name}
+                          </p>
+                          <p>{NODE_TYPE_LABELS[selected.node_type]}</p>
+                          {(() => {
+                            const lines = (graph.data?.edges ?? []).filter(
                               e =>
                                 e.from_node === selected.id ||
                                 e.to_node === selected.id
-                            )
-                            .map(
-                              e =>
-                                byId.get(
-                                  e.from_node === selected.id
-                                    ? e.to_node
-                                    : e.from_node
-                                )?.name
-                            )
-                            .join(", ") || "nothing yet"}
-                        </p>
-                        {transitions
-                          .filter(
-                            t =>
-                              t.from_node === selected.id ||
-                              t.to_node === selected.id
-                          )
-                          .map(t => {
-                            const other =
-                              t.from_node === selected.id
-                                ? t.to_node
-                                : t.from_node;
-                            return (
-                              <p
-                                key={t.id}
-                                className="flex items-center justify-between gap-2"
-                              >
-                                <span>
-                                  {t.transition_type === "elevator"
-                                    ? "Elevator"
-                                    : "Stairs"}{" "}
-                                  to{" "}
-                                  {other !== null ? byId.get(other)?.name : "?"}
-                                </span>
-                                <button
-                                  className="underline"
-                                  onClick={() =>
-                                    edits.unlinkFloors.mutate(t.id)
-                                  }
-                                >
-                                  Remove
-                                </button>
-                              </p>
                             );
-                          })}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-[#b42318]"
-                          onClick={() => {
-                            edits.removeNode.mutate(selected.id);
-                            setSelectedId(null);
-                          }}
-                        >
-                          <Trash2 size={14} className="mr-1" /> Delete point
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-[#718398]">
-                        Nothing selected.
-                      </p>
-                    )}
-                  </Panel>
-                  <Panel title="This building">
-                    <dl className="space-y-1 text-xs text-[#52657a]">
-                      {[
-                        ["Points", nodes.length],
-                        ["Connections", graph.data?.edges.length ?? 0],
-                        ["Floor links", transitions.length],
-                        [
-                          "Rooms placed",
-                          `${(rooms.data ?? []).filter(r => r.node_id !== null).length} of ${rooms.data?.length ?? 0}`,
-                        ],
-                      ].map(([label, value]) => (
-                        <div
-                          key={String(label)}
-                          className="flex justify-between"
-                        >
-                          <dt>{label}</dt>
-                          <dd className="font-semibold text-[#17365d]">
-                            {value}
-                          </dd>
+                            if (!lines.length)
+                              return <p>Connected to: nothing yet</p>;
+                            return (
+                              <>
+                                <p>Connected to:</p>
+                                {lines.map(e => (
+                                  <p
+                                    key={e.id}
+                                    className="flex items-center justify-between gap-2"
+                                  >
+                                    <span>
+                                      {byId.get(
+                                        e.from_node === selected.id
+                                          ? e.to_node
+                                          : e.from_node
+                                      )?.name ??
+                                        "The walk outside (campus walkways)"}
+                                    </span>
+                                    <button
+                                      className="underline"
+                                      aria-label={`Remove the connection to ${
+                                        byId.get(
+                                          e.from_node === selected.id
+                                            ? e.to_node
+                                            : e.from_node
+                                        )?.name
+                                      }`}
+                                      onClick={() =>
+                                        edits.disconnect.mutate(e.id)
+                                      }
+                                    >
+                                      Remove
+                                    </button>
+                                  </p>
+                                ))}
+                              </>
+                            );
+                          })()}
+                          {transitions
+                            .filter(
+                              t =>
+                                t.from_node === selected.id ||
+                                t.to_node === selected.id
+                            )
+                            .map(t => {
+                              const other =
+                                t.from_node === selected.id
+                                  ? t.to_node
+                                  : t.from_node;
+                              return (
+                                <p
+                                  key={t.id}
+                                  className="flex items-center justify-between gap-2"
+                                >
+                                  <span>
+                                    {t.transition_type === "elevator"
+                                      ? "Elevator"
+                                      : "Stairs"}{" "}
+                                    to{" "}
+                                    {other !== null
+                                      ? byId.get(other)?.name
+                                      : "?"}
+                                  </span>
+                                  <button
+                                    className="underline"
+                                    onClick={() =>
+                                      edits.unlinkFloors.mutate(t.id)
+                                    }
+                                  >
+                                    Remove
+                                  </button>
+                                </p>
+                              );
+                            })}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-[#b42318]"
+                            onClick={() => {
+                              edits.removeNode.mutate(selected.id);
+                              setSelectedId(null);
+                            }}
+                          >
+                            <Trash2 size={14} className="mr-1" /> Delete point
+                          </Button>
                         </div>
-                      ))}
-                    </dl>
-                  </Panel>
-                </aside>
-              </div>
+                      ) : (
+                        <p className="text-xs text-[#718398]">
+                          {requestedMissing
+                            ? "The map point linked from Hardware isn't on this building's map any more."
+                            : "Nothing selected."}
+                        </p>
+                      )}
+                    </Panel>
+                    <Panel title="Stairs and elevators">
+                      {services.length === 0 ? (
+                        <p className="text-xs text-[#718398]">
+                          No stairs or elevators are linked yet.
+                        </p>
+                      ) : (
+                        <ul className="space-y-2 text-xs text-[#52657a]">
+                          {services.map(group => (
+                            <li
+                              key={group.key}
+                              className="flex items-center justify-between gap-2"
+                            >
+                              <span>
+                                <span className="block font-semibold text-[#17365d]">
+                                  {group.name}
+                                </span>
+                                {group.active
+                                  ? "In service"
+                                  : "Out of service: routes avoid it and say so"}
+                              </span>
+                              <Switch
+                                checked={group.active}
+                                disabled={busy}
+                                aria-label={`${group.name} in service`}
+                                onCheckedChange={active =>
+                                  edits.setInService.mutate({
+                                    ids: group.ids,
+                                    active,
+                                  })
+                                }
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </Panel>
+                    {floor && modelFloor && (
+                      <Panel title={`This floor: ${modelFloor.name}`}>
+                        <FloorSettings
+                          key={`${floor.id}:${floor.short_name}:${floor.display_name}`}
+                          areaId={area.id}
+                          floor={floor}
+                          floors={floors}
+                          defaults={modelFloor}
+                          heightEditable={building.id.startsWith("area-")}
+                        />
+                      </Panel>
+                    )}
+                    <Panel title="This building">
+                      <dl className="space-y-1 text-xs text-[#52657a]">
+                        {[
+                          ["Points", nodes.length],
+                          ["Connections", graph.data?.edges.length ?? 0],
+                          ["Floor links", transitions.length],
+                          [
+                            "Rooms placed",
+                            `${(rooms.data ?? []).filter(r => r.node_id !== null).length} of ${rooms.data?.length ?? 0}`,
+                          ],
+                        ].map(([label, value]) => (
+                          <div
+                            key={String(label)}
+                            className="flex justify-between"
+                          >
+                            <dt>{label}</dt>
+                            <dd className="font-semibold text-[#17365d]">
+                              {value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </Panel>
+                  </aside>
+                </div>
+              )}
             </div>
           )}
+          <AddBuildingDialog
+            open={addingBuilding}
+            onClose={() => setAddingBuilding(false)}
+          />
         </>
       )}
     </>

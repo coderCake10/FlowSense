@@ -82,8 +82,11 @@ check("A8", "The trend chart's values are available as a table",
 check("A9", "Charts are labelled images with a legend",
   (await page.locator('svg[role="img"]').count()) >= 5 && (await visible(trend.getByRole("list", { name: "Legend" }))));
 
-check("A10", "The alert panel and the reports notice are shown",
-  (await visible(page.getByText("Alert panel"))) && (await visible(page.getByText(/QA-65/))));
+// A10 checked the "reports not available" notice until step 11 built reports
+// (qa:step11 covers them); now it checks the panel is there.
+check("A10", "The alert panel and the reports panel are shown",
+  (await visible(page.getByText("Alert panel"))) &&
+    (await visible(page.getByRole("button", { name: "Generate report" }))));
 check("E1", "No uncaught page errors", errors.length === 0, errors.join(" | "));
 await browser.close();
 const failed = results.filter(r => !r.pass).length;

@@ -26,6 +26,7 @@ from annotation.serializers.edges import (
 from annotation.serializers.nodes import (
     NodeAnnotationCreateSerializer,
     NodeAnnotationDetailSerializer,
+    NodeAnnotationMoveSerializer,
     NodeAnnotationSerializer,
 )
 from annotation.serializers.rooms import RoomAnnotationUpdateSerializer
@@ -41,6 +42,7 @@ __all__ = [
     "NodeAnnotationSerializer",
     "NodeAnnotationCreateSerializer",
     "NodeAnnotationDetailSerializer",
+    "NodeAnnotationMoveSerializer",
     "EdgeAnnotationSerializer",
     "EdgeAnnotationCreateSerializer",
     "EdgeAnnotationUpdateSerializer",

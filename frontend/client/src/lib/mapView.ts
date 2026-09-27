@@ -1,20 +1,24 @@
 /* Rules for the kiosk's 3D building map, kept free of three.js so they can be
  * unit tested: which parts of the model a view shows, which floor an object
  * belongs to, and where the route's moving arrows sit. */
-import type {
-  BuildingConfig,
-  Destination,
-  ModelFloor,
-  Point3,
-  RouteLeg,
+import {
+  CAMPUS_FLOOR,
+  type BuildingConfig,
+  type Destination,
+  type ModelFloor,
+  type Point3,
+  type RouteLeg,
 } from "@/data/navigation";
+import { campusToBuilding } from "./mapCoordinates";
 
 /** The campus around the building, the whole building from outside, or one
- * floor with the ones above it lifted away. */
+ * floor with the ones above it lifted away. `building`: the id of the
+ * building shown, when it isn't the one the visitor picked (a route's leg
+ * in another building). */
 export type MapView =
   | { mode: "campus" }
-  | { mode: "building" }
-  | { mode: "floor"; floor: string };
+  | { mode: "building"; building?: string }
+  | { mode: "floor"; floor: string; building?: string };
 
 export const BUILDING_VIEW: MapView = { mode: "building" };
 export const CAMPUS_VIEW: MapView = { mode: "campus" };
@@ -156,19 +160,179 @@ export function destinationLegs(
     : [];
 }
 
-/** The part of the route to draw in `view`: the leg on the floor shown.
- * Nothing in the building view, where a route would float over walls. */
+/** The floor (or `CAMPUS_FLOOR`) a view shows; null for a whole building. */
+const viewFloor = (view: MapView) =>
+  view.mode === "floor"
+    ? view.floor
+    : view.mode === "campus"
+      ? CAMPUS_FLOOR
+      : null;
+
+/** Whether `leg` is what `view` shows of `building` (the building shown). */
+export function legInView(
+  leg: RouteLeg,
+  building: BuildingConfig,
+  view: MapView
+) {
+  return (
+    (leg.building ?? building.id) === building.id &&
+    leg.floor === viewFloor(view)
+  );
+}
+
+/** The part of the route to draw in `view` of `building` (the building
+ * shown): the leg on the floor shown, or the walk between buildings in the
+ * campus view. Nothing in the building view, where a route would float over
+ * walls. */
 export function routeLegInView(
   building: BuildingConfig,
   view: MapView,
   destination: Destination | null
 ): RouteLeg | null {
-  if (!destination || view.mode !== "floor") return null;
+  if (!destination || view.mode === "building") return null;
   return (
     destinationLegs(building, destination).find(
-      leg => leg.floor === view.floor && leg.points.length >= 2
+      leg => legInView(leg, building, view) && leg.points.length >= 2
     ) ?? null
   );
+}
+
+/** The view that shows `leg` (`building`: the building the visitor picked). */
+export function legView(leg: RouteLeg, building: BuildingConfig): MapView {
+  if (leg.floor === CAMPUS_FLOOR) return CAMPUS_VIEW;
+  return leg.building && leg.building !== building.id
+    ? { mode: "floor", floor: leg.floor, building: leg.building }
+    : { mode: "floor", floor: leg.floor };
+}
+
+/** A view as text, to compare views (`shown`: the id of the building shown). */
+export function viewKey(view: MapView, shown: string) {
+  return `${shown}|${view.mode === "floor" ? view.floor : view.mode}`;
+}
+
+/** The campus's host: the building whose model coordinates are the
+ * campus's (the kiosk's own building). */
+export function campusHost(registry: readonly BuildingConfig[]) {
+  return registry.find(item => item.campus) ?? registry[0];
+}
+
+/** Where one point of a Navigation API route is (its segment's `stops`). */
+export interface RouteStop {
+  area_code: string;
+  floor_order: number;
+  name?: string;
+}
+
+/**
+ * Splits a route that may run between buildings (campus coordinates, one
+ * `stops` entry per point) into legs: one per building floor, and one for
+ * each walk outside (`CAMPUS_FLOOR`, drawn in the campus view). Each leg's
+ * points are in its building's model coordinates. Across a building's
+ * door the line continues (the next leg starts where the last one ended);
+ * a stair climb isn't drawn, as in `splitByFloor`.
+ */
+export function splitByStops(
+  registry: readonly BuildingConfig[],
+  points: Point3[],
+  stops: RouteStop[]
+): RouteLeg[] {
+  const host = campusHost(registry);
+  const legs: (RouteLeg & { names: string[] })[] = [];
+  points.forEach((point, index) => {
+    const stop = stops[index];
+    const building = registry.find(item => item.areaCode === stop?.area_code);
+    const id = building?.id ?? host.id;
+    const floor = building
+      ? (
+          building.model.floors[(stop.floor_order ?? 1) - 1] ??
+          building.model.floors[0]
+        ).object
+      : CAMPUS_FLOOR;
+    const local = campusToBuilding(building?.placement, point);
+    const last = legs[legs.length - 1];
+    if (last && last.building === id && last.floor === floor) {
+      last.points.push(local);
+      last.names.push(stop?.name ?? "");
+      return;
+    }
+    const leg = {
+      building: id,
+      floor,
+      points: [local],
+      names: [stop?.name ?? ""],
+    };
+    const outside = (item: RouteLeg) => item.floor === CAMPUS_FLOOR;
+    if (last && (last.building !== id || outside(last) || outside(leg))) {
+      leg.points.unshift(
+        campusToBuilding(building?.placement, points[index - 1])
+      );
+    }
+    legs.push(leg);
+  });
+  return legs
+    .filter(
+      (leg, index) =>
+        leg.points.length > 1 || index === 0 || index === legs.length - 1
+    )
+    .map(({ names, ...leg }) =>
+      leg.floor === CAMPUS_FLOOR && names.some(name => /overpass/i.test(name))
+        ? { ...leg, via: "overpass" }
+        : leg
+    );
+}
+
+/** Whether a route runs through more than one building (or outside). */
+export function crossesBuildings(legs: readonly RouteLeg[]) {
+  return legs.some(
+    leg =>
+      leg.floor === CAMPUS_FLOOR ||
+      (leg.building ?? "") !== (legs[0].building ?? "")
+  );
+}
+
+/** What a leg is called: "Second floor", or across buildings
+ * "A Building · Second floor" and the campus's name outside. */
+export function legName(
+  leg: RouteLeg,
+  building: BuildingConfig,
+  registry: readonly BuildingConfig[],
+  qualified: boolean
+) {
+  if (leg.floor === CAMPUS_FLOOR)
+    return campusHost(registry).campus?.name ?? "Outside";
+  const owner = registry.find(item => item.id === leg.building) ?? building;
+  const floor = owner.model.floors.find(f => f.object === leg.floor);
+  const name = floor?.name ?? leg.floor;
+  return qualified ? `${owner.name} · ${name}` : name;
+}
+
+/** The label at the end of a leg that doesn't end at the destination:
+ * "Elevator to 3F", "Exit", "A Building front entrance". */
+export function legEndLabel(
+  leg: RouteLeg,
+  next: RouteLeg,
+  building: BuildingConfig,
+  registry: readonly BuildingConfig[]
+) {
+  const owner = (item: RouteLeg) =>
+    registry.find(b => b.id === item.building) ?? building;
+  if (next.floor === CAMPUS_FLOOR) return "Exit";
+  if (leg.floor === CAMPUS_FLOOR || owner(leg).id !== owner(next).id)
+    return `${owner(next).name} ${owner(next).startLabel.toLowerCase()}`;
+  const nextFloor = owner(next).model.floors.find(f => f.object === next.floor);
+  return rideLabel(leg.via, nextFloor?.label ?? next.floor);
+}
+
+/** The view to open for a destination: where its route starts (maybe in
+ * another building), or the destination's own floor with no route yet. */
+export function firstViewFor(
+  building: BuildingConfig,
+  destination: Destination
+): MapView {
+  const first = destinationLegs(building, destination)[0];
+  return first
+    ? legView(first, building)
+    : { mode: "floor", floor: destinationFloor(building, destination) };
 }
 
 /** Floor to show first for a destination: where its route starts, or the
@@ -185,7 +349,9 @@ export function firstFloorFor(
 
 /** Splits a route (model coordinates) into consecutive legs by floor, using
  * each point's height. A stair climb ends one leg and starts the next on the
- * new floor (the climb itself isn't drawn: it would cut through the floors). */
+ * new floor (the climb itself isn't drawn: it would cut through the floors).
+ * Floors the route only passes through (one point: on the stairs or in the
+ * lift) aren't legs, so the kiosk says "Go to 3F", not "Go to 2F". */
 export function splitByFloor(
   floors: ModelFloor[],
   points: Point3[]
@@ -200,5 +366,98 @@ export function splitByFloor(
       legs.push({ floor, points: [point] });
     }
   }
-  return legs;
+  return legs.filter(
+    (leg, index) =>
+      leg.points.length > 1 || index === 0 || index === legs.length - 1
+  );
+}
+
+export interface RouteStepInView {
+  /** 1-based step and how many: one per floor the route walks on. */
+  step: number;
+  count: number;
+  floorName: string;
+  /** What to do on this floor. */
+  instruction: string;
+  previous?: { floor: string; name: string; view: MapView };
+  next?: { floor: string; name: string; view: MapView };
+}
+
+const rideName = (via: string | undefined) =>
+  via === "elevator"
+    ? "the elevator"
+    : via === "stairs"
+      ? "the stairs"
+      : via === "escalator"
+        ? "the escalator"
+        : "the stairs or elevator";
+
+/** The label at the end of a leg that leaves the floor: "Elevator to 3F". */
+export function rideLabel(via: string | undefined, floorLabel: string) {
+  if (via === "elevator") return `Elevator to ${floorLabel}`;
+  if (via === "stairs") return `Stairs to ${floorLabel}`;
+  return `Go to ${floorLabel}`;
+}
+
+/** Where a multi-floor (or building-to-building) route is at in `view`
+ * of `building` (the building shown): the step shown, what to do, and the
+ * steps before and after. Null for one-floor routes, and outside the parts
+ * of the route the view shows. `picked`: the building the visitor chose. */
+export function routeStepInView(
+  building: BuildingConfig,
+  view: MapView,
+  destination: Destination | null,
+  registry: readonly BuildingConfig[] = [building],
+  picked: BuildingConfig = building
+): RouteStepInView | null {
+  if (!destination || view.mode === "building") return null;
+  const legs = destinationLegs(building, destination);
+  if (legs.length < 2) return null;
+  const index = legs.findIndex(leg => legInView(leg, building, view));
+  if (index < 0) return null;
+  const qualified = crossesBuildings(legs);
+  const owner = (leg: RouteLeg) =>
+    registry.find(item => item.id === leg.building) ?? building;
+  const floorOf = (leg: RouteLeg) =>
+    owner(leg).model.floors.find(f => f.object === leg.floor);
+  const name = (leg: RouteLeg) => legName(leg, building, registry, qualified);
+  const step = (leg: RouteLeg) => ({
+    floor: leg.floor,
+    view: legView(leg, picked),
+    name: name(leg),
+  });
+  const leg = legs[index];
+  const after = legs[index + 1];
+  const before = legs[index - 1];
+  let instruction = `Walk to ${destination.code}.`;
+  if (after && after.floor === CAMPUS_FLOOR) {
+    instruction = `Walk out of the ${owner(leg).name}.`;
+  } else if (after && leg.floor === CAMPUS_FLOOR) {
+    instruction =
+      leg.via === "overpass"
+        ? `Cross the highway on the overpass, then walk to the ${owner(after).name}.`
+        : `Walk to the ${owner(after).name}.`;
+  } else if (after && owner(after).id !== owner(leg).id) {
+    instruction = `Walk to the ${owner(after).name}.`;
+  } else if (after) {
+    const up =
+      (floorOf(after)?.elevation ?? 0) > (floorOf(leg)?.elevation ?? 0);
+    instruction = `Walk to ${rideName(leg.via)}, then go ${up ? "up" : "down"} to the ${(
+      floorOf(after)?.name ?? after.floor
+    ).toLowerCase()}.`;
+  }
+  return {
+    step: index + 1,
+    count: legs.length,
+    floorName: name(leg),
+    instruction,
+    previous: before && step(before),
+    next: after && step(after),
+  };
+}
+
+/** How long "Follow on this kiosk" shows a floor's part of the route (s):
+ * longer walks get longer, within 5 to 12 s. */
+export function legSeconds(points: Point3[]) {
+  return Math.min(12, Math.max(5, 3 + pathLength(points) / 6));
 }

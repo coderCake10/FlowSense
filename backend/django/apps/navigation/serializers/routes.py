@@ -75,6 +75,25 @@ class NavigationRouteCreateSerializer(serializers.Serializer):
         return attrs
 
 
+class NavigationFloorChangeSerializer(serializers.Serializer):
+    """One ride between floors along a segment (a lift passing floors is one)."""
+
+    transition_type = serializers.CharField()
+    from_floor_id = serializers.IntegerField()
+    from_floor_order = serializers.IntegerField()
+    to_floor_id = serializers.IntegerField()
+    to_floor_order = serializers.IntegerField()
+
+
+class NavigationStopSerializer(serializers.Serializer):
+    """One point of a segment: its node and name, building (area code) and floor."""
+
+    node_id = serializers.IntegerField()
+    area_code = serializers.CharField()
+    floor_order = serializers.IntegerField()
+    name = serializers.CharField(allow_blank=True, default="")
+
+
 class NavigationRouteSegmentSerializer(serializers.Serializer):
     """
     One traversed leg of a computed route (origin -> first destination,
@@ -89,6 +108,10 @@ class NavigationRouteSegmentSerializer(serializers.Serializer):
     to_node_id = serializers.IntegerField()
     geometry = GeoJSONField()
     distance = serializers.FloatField()
+    # Additive: the stairs or lift rides along the segment, in order.
+    floor_changes = NavigationFloorChangeSerializer(many=True, default=list)
+    # Additive (step 13): each point's building and floor, in walking order.
+    stops = NavigationStopSerializer(many=True, default=list)
 
 
 class NavigationRouteDestinationSerializer(serializers.ModelSerializer):
@@ -141,6 +164,8 @@ class NavigationRouteSerializer(serializers.Serializer):
     origin_node = NavigationNodeSummarySerializer(read_only=True)
     destinations = NavigationRouteDestinationSerializer(many=True, read_only=True)
     segments = NavigationRouteSegmentSerializer(many=True, read_only=True)
+    # Additive: e.g. "The elevator is out of service." (services.service_notices).
+    notices = serializers.ListField(child=serializers.CharField(), read_only=True, default=list)
     route_distance = serializers.DecimalField(
         max_digits=18, decimal_places=4, read_only=True, allow_null=True
     )

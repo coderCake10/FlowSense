@@ -4,7 +4,10 @@ import {
   arrowsAlong,
   destinationLegs,
   firstFloorFor,
+  legSeconds,
+  rideLabel,
   routeLegInView,
+  routeStepInView,
   splitByFloor,
   BUILDING_VIEW,
   CAMPUS_VIEW,
@@ -191,6 +194,78 @@ describe("route legs", () => {
     ]);
     expect(firstFloorFor(building, { ...demo, legs })).toBe("FLOOR_1");
   });
+  it("walks a multi-floor route one floor at a time", () => {
+    const legs = [
+      { floor: "FLOOR_1", points: onFirst, via: "elevator" },
+      {
+        floor: "FLOOR_3",
+        points: [
+          [0, 8, 0],
+          [4, 8, 0],
+        ] as Point3[],
+      },
+    ];
+    const route = { ...demo, legs };
+    const first = routeStepInView(
+      building,
+      { mode: "floor", floor: "FLOOR_1" },
+      route
+    );
+    expect(first).toMatchObject({
+      step: 1,
+      count: 2,
+      floorName: "First floor",
+      instruction: "Walk to the elevator, then go up to the third floor.",
+      next: { floor: "FLOOR_3", name: "Third floor" },
+    });
+    expect(first?.previous).toBeUndefined();
+    expect(
+      routeStepInView(building, { mode: "floor", floor: "FLOOR_3" }, route)
+    ).toMatchObject({
+      step: 2,
+      instruction: "Walk to EA-110.",
+      previous: { floor: "FLOOR_1" },
+    });
+    // Not shown for one-floor routes, or off the route's floors.
+    expect(
+      routeStepInView(building, { mode: "floor", floor: "FLOOR_1" }, demo)
+    ).toBeNull();
+    expect(
+      routeStepInView(building, { mode: "floor", floor: "FLOOR_2" }, route)
+    ).toBeNull();
+    expect(rideLabel("elevator", "3F")).toBe("Elevator to 3F");
+    expect(rideLabel(undefined, "3F")).toBe("Go to 3F");
+  });
+  it("shows each floor of a played route for 5 to 12 seconds", () => {
+    expect(
+      legSeconds([
+        [0, 1, 0],
+        [3, 1, 0],
+      ])
+    ).toBe(5);
+    expect(
+      legSeconds([
+        [0, 1, 0],
+        [30, 1, 0],
+      ])
+    ).toBe(8);
+    expect(
+      legSeconds([
+        [0, 1, 0],
+        [200, 1, 0],
+      ])
+    ).toBe(12);
+  });
+  it("skips floors a route only passes through", () => {
+    const legs = splitByFloor(floors, [
+      [0, 1, 0],
+      [3, 1, 0],
+      [3, 4.5, 0], // the lift passing the second floor
+      [3, 8, 0],
+      [6, 8, 0],
+    ]);
+    expect(legs.map(leg => leg.floor)).toEqual(["FLOOR_1", "FLOOR_3"]);
+  });
 });
 
 describe("campus view", () => {
@@ -206,6 +281,7 @@ describe("campus view", () => {
       ...building,
       campus: {
         name: "AUF Campus",
+        areaCode: "AUF",
         modelUrl: "/models/campus.glb",
         neighbours: [],
         frame: [

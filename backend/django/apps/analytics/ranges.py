@@ -40,9 +40,13 @@ def _local_midnight(day):
 
 
 def _parse_moment(value, name, end_of_day=False):
-    moment = parse_datetime(value)
+    # A plain date means the whole local day. Check it first: parse_datetime
+    # also accepts "2026-09-24" (as midnight), which dropped the last day of
+    # every custom range that ended on a date.
+    day = parse_date(value) if len(value) == 10 else None
+    moment = None if day else parse_datetime(value)
     if moment is None:
-        day = parse_date(value)
+        day = day or parse_date(value)
         if day is None:
             raise ValidationError({name: "Use a date (2026-09-24) or an ISO 8601 date and time."})
         moment = _local_midnight(day) + (timedelta(days=1) - timedelta(microseconds=1) if end_of_day else timedelta())

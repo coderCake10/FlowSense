@@ -255,7 +255,7 @@ docker compose ps
 All services should say `running` (the database also `healthy`). If one says
 `exited` or keeps restarting, see section 14.
 
-### 6.3 Create the database tables and load the EYA Building
+### 6.3 Create the database tables and load the buildings
 
 Run these **one line at a time**, each exactly as written:
 
@@ -263,15 +263,25 @@ Run these **one line at a time**, each exactly as written:
 docker compose exec backend python manage.py migrate
 docker compose exec backend python manage.py seed_campus
 docker compose exec backend python manage.py seed_eya_routes
+docker compose exec backend python manage.py seed_a_routes
+docker compose exec backend python manage.py seed_assets
 ```
 
 | Command | What it does | Expected output (last line) |
 |---|---|---|
 | `migrate` | Creates every schema, table, constraint and index | `Applying …  OK` lines, or `No migrations to apply.` |
-| `seed_campus` | Loads the AUF campus, the EYA Building, its 6 floors and 92 rooms | `EYA Building seeded: …` |
-| `seed_eya_routes` | Loads the first floor's starter routes (kiosk → EA-101A, EA-110, EA-111) | `EYA starter routes: 9 nodes, 8 edges.` |
+| `seed_campus` | Loads the AUF campus, the EYA Building (6 floors, 97 rooms), the A Building (4 floors, 48 rooms) and the campus walkways | `Campus seeded: … (EYA Building: 6 floors, 97 rooms; A Building: 4 floors, 48 rooms).` |
+| `seed_eya_routes` | Loads the EYA Building's walking routes, generated from the 3D model: every room on all 6 floors, the stairs, the elevator and the kiosk | `EYA routes: 157 points, 151 connections, 15 stair and elevator links; 97 rooms routable.` |
+| `seed_a_routes` | Loads the A Building's walking routes (generated from its model: 46 rooms, three staircases, the front entrance) and the walk from the EYA kiosk over the overpass to it. Run after `seed_eya_routes` | `A Building routes: 99 points, 94 connections, 9 stair and elevator links; 46 rooms routable; walk from the EYA kiosk to the front entrance: 12 points, 252 m.` |
+| `seed_assets` | Puts the models that come with the app into **Asset Management**, all live: the EYA Building, the A Building and the campus (low-fidelity area) | One line per model, e.g. `A Building model: v2 added, validation passed, now live` |
 
-All three are safe to run again at any time.
+All five are safe to run again at any time. Run `seed_assets` again after
+pulling a newer committed model: an unchanged file is skipped, a changed one
+becomes the next version. It never replaces a version an admin made live,
+and a model an admin took offline stays offline.
+
+Without `seed_assets`, Asset Management starts empty and the kiosk simply
+uses the committed models.
 
 ### 6.4 Create your admin account
 
@@ -310,10 +320,47 @@ role in quotes.
 Codes expire after 10 minutes. You get **10 tries per hour per email**; if
 you're told to wait, wait, or use another admin account.
 
-**Real emails** go through the project Gmail account. Its app password is
-private: only add it if the repository owner gives it to you directly, and
-only in your own `.env` (never in `.env.example`, a commit, a screenshot or
-a group chat). Locally, reading the code from the logs is enough.
+### 7.1 Sending the code to real inboxes (Gmail)
+
+Sending is already built in; without email settings FlowSense prints the
+email to the logs instead. To deliver it to Gmail, one person (the project
+Gmail account's owner) does this once:
+
+1. On the project Gmail account, turn on **2-Step Verification**
+   (Google Account → Security).
+2. Create an **app password**: Google Account → Security → 2-Step
+   Verification → **App passwords** → name it "FlowSense" → copy the
+   16-letter password. (A normal Gmail password doesn't work for this.)
+3. In your own `FlowSense/.env` (not `.env.example`), add:
+
+   ```bash
+   EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+   EMAIL_HOST=smtp.gmail.com
+   EMAIL_PORT=587
+   EMAIL_USE_TLS=True
+   EMAIL_HOST_USER=the-project-account@gmail.com
+   EMAIL_HOST_PASSWORD=the16letterapppassword
+   DEFAULT_FROM_EMAIL=FlowSense <the-project-account@gmail.com>
+   # The sign-in link in the email opens this address:
+   FLOWSENSE_ADMIN_BASE_URL=http://localhost
+   ```
+
+   Write the app password without spaces.
+4. Restart the two services that send email, so they read the new settings:
+
+   ```bash
+   docker compose up -d --force-recreate backend celery-worker
+   ```
+
+5. Sign in again: the code and the sign-in link arrive in the admin's inbox
+   (check Spam the first time). If not, `docker compose logs --tail=50
+   celery-worker` shows the SMTP error (for example "Username and Password
+   not accepted" means the app password is wrong).
+
+The app password is private: keep it only in `.env` (never in
+`.env.example`, a commit, a screenshot or a group chat). On other team
+laptops, reading the code from the logs is enough. For phones or other
+devices, set `FLOWSENSE_ADMIN_BASE_URL` to the laptop's address (section 11.1).
 
 ---
 
@@ -323,16 +370,16 @@ a group chat). Locally, reading the code from the logs is enough.
 |---|---|
 | http://localhost/attraction | The attract screen: the 3D EYA Building turning slowly. It stays until you tap. |
 | http://localhost/kiosk | The kiosk. The map opens on the whole building. Tap it: the outside lifts away and the first floor shows. |
-| On the kiosk, the list on the left | "92 Destinations · by floor". Type `computer studies`: EA-110 and EA-111 come first. |
+| On the kiosk, the list on the left | "97 Destinations · by floor". Type `computer studies`: EA-110 and EA-111 come first. |
 | On the kiosk, pick **EA-110** | A blue route with moving gold arrows from "You are here" to EA-110. |
-| On the kiosk, pick **EA-305** (3rd floor) | The map switches to 3F and says the room isn't on the map yet. That's expected until someone places it (section 10). |
+| On the kiosk, pick **EA-305** (3rd floor) | The route starts on the first floor: "Step 1 of 2 · Walk to the elevator, then go up to the third floor" and "Elevator to 3F" at its end. **Next: Third floor** shows the rest, ending at EA-305. |
 | http://localhost/ (signed in) | The admin dashboard |
 | **Map Annotation** in the sidebar | The 3D EYA model, floor buttons 1F–6F, Top down / Isometric |
 | **Hardware Management** | The device registry. Opening the kiosk page registers this browser as an **Unregistered** kiosk within 30 s. |
 | **Analytics** | After a few kiosk searches, the search section shows them |
 | http://localhost/docs/ | The API reference (Swagger) |
 
-The first time, the 3D model takes a few seconds to load (16.5 MB); after
+The first time, the 3D model takes a few seconds to load (17.3 MB); after
 that the browser caches it.
 
 ---
@@ -366,9 +413,13 @@ this guide, so the app's rules and audit log stay correct.
 
 ## 10. Put rooms on the map (Map Annotation)
 
-Only 3 of the 92 rooms have routes after setup (the starter routes). Every
-other room gets one once someone places its door and the corridors leading
-to it in **Map Annotation**. The full guide is
+All 97 EYA rooms and 46 of the A Building's 48 have routes after setup:
+`seed_eya_routes` and `seed_a_routes` load walking networks generated from
+the 3D models (A-401 and A-412 have no sign in the A model: place their doors
+here) (see
+[`docs/setup/building-models.md`](building-models.md#2c-the-navigation-network)).
+Use **Map Annotation** to adjust it: move a door, add a shortcut, or place a
+room the model doesn't have a sign for. The full guide is
 [`docs/setup/map-annotation.md`](map-annotation.md). In short:
 
 1. Dashboard → **Map Annotation**. Pick a floor. **Top down** is easiest.
@@ -417,6 +468,62 @@ demo laptop) where the real annotation is done.
 3. Test from the laptop first: open `http://<PC-IP>/kiosk` in the laptop's
    browser. If that works, other devices can use the same address.
 
+### 11.2a When a device can't open the site
+
+Safari's "the server stopped responding" (or Chrome's "took too long to
+respond") means the device reached nothing at that address: the laptop's
+firewall or the network dropped it. Check in this order:
+
+1. **On the laptop itself**, open `http://<PC-IP>/kiosk` (the IP, not
+   `localhost`). If that fails too, the problem is the laptop, not the iPad:
+   check `docker compose ps` (nginx must be running) and that `<PC-IP>` is
+   the **Wi-Fi** adapter's IPv4 address, not `vEthernet (WSL)`.
+2. **Type the full address** on the iPad, with `http://` and no `s`:
+   `http://<PC-IP>/attraction`. FlowSense isn't served over HTTPS locally,
+   and Safari can hang trying it first.
+3. **Same network.** Laptop and iPad on the same Wi-Fi or hotspot, VPNs off.
+   Campus and hotel Wi-Fi usually stop devices from reaching each other: use
+   a **phone hotspot**.
+4. **Network profile Private** (11.2 step 1). The firewall rule only allows
+   Private networks; a network set to Public blocks everything.
+5. **A Docker block rule.** If Windows once asked whether to allow *Docker
+   Desktop Backend* and the prompt was closed or cancelled, Windows added
+   **Block** rules, and a block beats the FlowSense allow rule. In
+   PowerShell as administrator:
+
+   ```powershell
+   Get-NetFirewallRule | Where-Object { $_.DisplayName -like "*Docker*" -and $_.Action -eq "Block" } | Select-Object DisplayName, Profile
+   ```
+
+   If it lists any, remove them, then restart Docker Desktop:
+
+   ```powershell
+   Get-NetFirewallRule | Where-Object { $_.DisplayName -like "*Docker*" -and $_.Action -eq "Block" } | Remove-NetFirewallRule
+   ```
+
+6. **Docker Desktop, not Docker inside Ubuntu.** In the Ubuntu terminal,
+   `docker info | grep "Operating System"` should say **Docker Desktop**. If
+   Docker was installed inside Ubuntu instead (`sudo apt install docker…`),
+   its ports are only reachable from the laptop itself. Use Docker Desktop
+   (section 4), or turn on WSL's mirrored networking: in
+   `C:\Users\<you>\.wslconfig` put
+
+   ```ini
+   [wsl2]
+   networkingMode=mirrored
+   ```
+
+   then in PowerShell as administrator:
+
+   ```powershell
+   Set-NetFirewallHyperVVMSetting -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -DefaultInboundAction Allow
+   wsl --shutdown
+   ```
+
+   and start Ubuntu and FlowSense again (Windows 11 22H2 or later).
+7. **Test from the iPad:** `http://<PC-IP>/api/v1/system/health` shows a
+   short JSON reply when the path is open.
+
 ### 11.3 iPad (or any tablet) as the kiosk
 
 1. In Safari, open `http://<PC-IP>/attraction`.
@@ -424,6 +531,11 @@ demo laptop) where the real annotation is done.
    30 seconds. The attract screen shows its ID (`kiosk-…`) in small print.
    Click **Register**, give it a name (for example *EYA Lobby Kiosk*) and
    save. It turns **Online**. Visitor sessions then count on the dashboard.
+   **Deleted it by mistake?** The iPad keeps its kiosk ID, and a deleted
+   kiosk is ignored, so it doesn't come back as Unregistered. Its attract
+   screen says it was deleted. On the Hardware page set the status filter to
+   **Deleted**, then **Restore** (it opens the Register dialog). The same
+   works for sensors.
 3. For a kiosk feel:
    - **Settings → Display & Brightness → Auto-Lock → Never**, and keep it
      charging.
@@ -451,8 +563,9 @@ demo laptop) where the real annotation is done.
 
 ### 11.5 ESP32 sensor
 
-The team's firmware is built with the **Arduino IDE**. For it to join
-FlowSense:
+The sensor's sketch is in `firmware/flowsense_sensor/`, with step-by-step
+setup, upload and troubleshooting in [`firmware/README.md`](../../firmware/README.md).
+It's built with the **Arduino IDE**. For it to join FlowSense:
 
 | In the firmware | Must be |
 |---|---|
@@ -527,6 +640,8 @@ docker compose up -d --build
 docker compose exec backend python manage.py migrate
 docker compose exec backend python manage.py seed_campus
 docker compose exec backend python manage.py seed_eya_routes
+docker compose exec backend python manage.py seed_a_routes
+docker compose exec backend python manage.py seed_assets
 ```
 
 Then hard-refresh the browser (**Ctrl+Shift+R**).
@@ -560,7 +675,7 @@ cd ~/CAPSTONE-FLOWSENSE/FlowSense/frontend
 npm ci
 npm run check        # TypeScript: no errors
 npm test             # unit tests: 71 passed
-npm run models:check # OK EYA.glb (16.5 MB) and the Draco decoder
+npm run models:check # OK EYA.glb (17.3 MB) and the Draco decoder
 ```
 
 Use `npm ci` (exact versions from `package-lock.json`). Only use
@@ -639,8 +754,7 @@ Expected: `Ran 113 tests … OK`. (Or simply run them in the container:
 | Problem | Fix |
 |---|---|
 | The map says it isn't available | `npm run models:check` (13.1), or check `frontend/client/public/models/EYA.glb` exists (it comes with the repo). |
-| A room has no route ("isn't on the map yet") | Expected until its door and corridors are placed in Map Annotation (section 10). |
-| EA-101A/EA-110/EA-111 have no route | Run `seed_eya_routes` (6.3). |
+| A room has no route ("isn't on the map yet") | Run `seed_eya_routes` and `seed_a_routes` (6.3). A room added later (not in the model) needs its door placed in Map Annotation (section 10). |
 | "No walkway on the map reaches this room yet" | The door is placed but not connected to the corridors: connect it in Map Annotation. |
 | The kiosk list shows only 3 destinations | The frontend isn't talking to the API. Use `http://localhost/kiosk`, and check `backend` is running. |
 | The 3D map is slow | Close other tabs/apps. The map only redraws while something moves; laptops without a graphics card are slower. |
@@ -681,11 +795,11 @@ Setup:
 - [ ] Repository cloned into `~/CAPSTONE-FLOWSENSE`
 - [ ] `.env` created from `.env.example`
 - [ ] `docker compose up -d --build`; `docker compose ps` all running
-- [ ] `migrate`, `seed_campus`, `seed_eya_routes`, `create_admin` succeeded
+- [ ] `migrate`, `seed_campus`, `seed_eya_routes`, `seed_a_routes`, `seed_assets`, `create_admin` succeeded
 
 Working:
 - [ ] Signed in at `http://localhost/auth` with the code from the logs
-- [ ] Kiosk lists 92 destinations; EA-110 shows a route with moving arrows
+- [ ] Kiosk lists 97 destinations; EA-110 shows a route with moving arrows; EA-305 says "Elevator to 3F", and **Next: Third floor** shows the rest
 - [ ] Attract screen shows the 3D building and waits for a tap
 - [ ] Map Annotation shows the 3D model with floors 1F–6F
 

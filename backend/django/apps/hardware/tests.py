@@ -373,6 +373,24 @@ class KioskHeartbeatTests(TestCase):
         self.assertEqual((body["status"], body["records_sessions"]), ("decommissioned", False))
         self.assertEqual(Device.objects.count(), 1)
 
+    def test_a_deleted_kiosk_can_be_found_and_registered_again(self):
+        self.beat()
+        device = Device.objects.get(device_id="kiosk-3f9a2c7e41b0")
+        register_device(device, {"name": "Kiosk", "enabled": True})
+        from hardware.services import decommission_device
+        decommission_device(device)
+        sign_in_as_admin(self.client)
+        listed = lambda query="": [d["device_id"] for d in data(self.client.get(f"{API}/hardware/devices{query}"))]
+        self.assertEqual(listed(), [])
+        self.assertEqual(listed("?status=decommissioned"), ["kiosk-3f9a2c7e41b0"])
+        response = self.client.post(f"{API}/hardware/devices/{device.id}/register",
+                                    {"name": "EYA Lobby Kiosk", "enabled": True}, content_type="application/json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(listed(), ["kiosk-3f9a2c7e41b0"])
+        # Its heartbeats count again.
+        body = data(self.beat())
+        self.assertEqual((body["status"], body["records_sessions"]), ("online", True))
+
     def test_heartbeats_are_rate_limited_per_ip(self):
         with mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {"kiosk_heartbeat": "2/min"}):
             self.assertEqual(self.beat().status_code, 200)

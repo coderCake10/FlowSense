@@ -60,6 +60,19 @@ class Area(models.Model):
     description = models.TextField(null=True, blank=True)
     area_type = models.CharField(max_length=30, choices=AREA_TYPE_CHOICES)
     geometry = models.GeometryField(srid=3857, null=True, blank=True)
+    # Additive (step 14). Where a building's 3D model stands in the campus
+    # (the kiosk building's model coordinates, glTF: metres, Y up):
+    # {"position": [x, y, z], "rotation_y": radians}. Null: at the origin
+    # (the kiosk's own building). Navigation points are stored in campus
+    # coordinates, so changing it moves the building's points too
+    # (map.services.place_building).
+    placement = models.JSONField(null=True, blank=True)
+    # Additive (step 14). How the kiosk shows the building's model, for
+    # buildings added from the admin panel: {"exterior": [object names
+    # lifted away when opened], "by_height": [groups split between floors by
+    # height], "start": [x, y, z] where routes into it arrive (its model's
+    # coordinates), "start_label": "Front entrance"}.
+    map_settings = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -86,6 +99,10 @@ class Floor(models.Model):
     glb_node_name = models.CharField(max_length=255, null=True, blank=True)
     floor_order = models.IntegerField()
     elevation = models.DecimalField(max_digits=16, decimal_places=4, null=True, blank=True)
+    # Additive (step 14, QA-93): what the kiosk calls the floor. Blank: "1F",
+    # "First floor" from its order.
+    display_name = models.CharField(max_length=100, null=True, blank=True)
+    short_name = models.CharField(max_length=20, null=True, blank=True)
     navigable = models.BooleanField(default=True)
     visible_in_kiosk = models.BooleanField(default=True)
     active = models.BooleanField(default=True)
@@ -425,3 +442,30 @@ class FloorTransition(models.Model):
 
     def __str__(self):
         return f"{self.transition_type}: {self.from_node_id} -> {self.to_node_id}"
+
+
+class CampusLabel(models.Model):
+    """
+    Additive (step 14). A name shown in the kiosk's campus view (a landmark
+    such as the overpass, or a building without a 3D model), placed in
+    Map Annotation. `geometry` is in campus coordinates, stored like
+    navigation nodes (model x, -z, height).
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    area = models.ForeignKey(
+        Area, on_delete=models.CASCADE, related_name="labels", db_column="area_id"
+    )
+    name = models.CharField(max_length=150)
+    geometry = models.PointField(srid=3857, dim=3)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = '"campus"."labels"'
+        indexes = [models.Index(fields=["area"], name="idx_labels_area")]
+
+    def __str__(self):
+        return self.name
+

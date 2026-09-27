@@ -6,18 +6,19 @@ annotations) and when") and the dashboard's Recent Activity panel.
 from analytics.models import AuditEvent
 
 
-def record(request, event_type, action, entity=None, description="", metadata=None):
+def record(request, event_type, action, entity=None, description="", metadata=None, entity_type=None):
     """Write one audit row for the admin behind `request` (None for system actions).
 
     `entity` is the changed model instance; its lowercase class name and
     primary key become entity_type / entity_id. Non-integer primary keys
     (for example a setting's key) go into metadata instead, because
-    entity_id is a BIGINT in the schema.
+    entity_id is a BIGINT in the schema. `entity_type` overrides the class
+    name (the asset audit view expects "asset_version", for example).
     """
     metadata = dict(metadata or {})
-    entity_type = entity_id = None
+    entity_id = None
     if entity is not None:
-        entity_type = type(entity).__name__.lower()
+        entity_type = entity_type or type(entity).__name__.lower()
         if isinstance(entity.pk, int):
             entity_id = entity.pk
         else:

@@ -101,10 +101,13 @@ def effective_status(device: Device, now=None) -> str:
 
 @transaction.atomic
 def register_device(device: Device, validated_data: dict) -> Device:
-    """Register a discovered device from the dashboard's Register modal."""
-    if device.status != Device.STATUS_UNREGISTERED:
-        raise DeviceStateError("Only an unregistered device can be registered.")
+    """Register a discovered device from the dashboard's Register modal. A
+    deleted (decommissioned) device can be registered again: it comes back to
+    the registry, and its messages count again."""
+    if device.status not in (Device.STATUS_UNREGISTERED, Device.STATUS_DECOMMISSIONED):
+        raise DeviceStateError("Only an unregistered or deleted device can be registered.")
 
+    device.deleted_at = None
     device.name = validated_data["name"]
     device.enabled = validated_data.get("enabled", True)
     device.registered_at = timezone.now()

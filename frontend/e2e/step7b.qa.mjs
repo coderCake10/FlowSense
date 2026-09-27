@@ -94,7 +94,7 @@ const after = await page.screenshot({ clip });
 check(
   "B4b",
   "A single-floor route ends at the room, not at a floor change",
-  (await page.getByText(/^Go to \dF$/).count()) === 0
+  (await page.getByText(/^(Go|Elevator|Stairs) to \dF$/).count()) === 0
 );
 check(
   "B5",
@@ -123,7 +123,7 @@ check(
   "B7b",
   "Campus button shows the campus with both buildings and the overpass named",
   (await viewLabel("AUF Campus")) &&
-    (await page.getByText("A Building", { exact: true }).isVisible()) &&
+    (await page.getByRole("button", { name: "A Building ›" }).isVisible()) &&
     (await page.getByText("Overpass", { exact: true }).isVisible())
 );
 await page.screenshot({ path: `${OUT}/step7b-campus.png` });

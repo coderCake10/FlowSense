@@ -39,12 +39,22 @@ from annotation.views import (
     RoomAnnotationViewSet,
     StairAnnotationViewSet,
 )
+from annotation.views.campus import (
+    BuildingCreateView,
+    CampusLabelViewSet,
+    FloorAnnotationViewSet,
+    RoomCreateView,
+    RoomRemoveView,
+)
 
 router = DefaultRouter(trailing_slash=True)
 router.register("nodes", NodeAnnotationViewSet, basename="annotation-node")
 router.register("edges", EdgeAnnotationViewSet, basename="annotation-edge")
 router.register("transitions", FloorTransitionAnnotationViewSet, basename="annotation-transition")
 router.register("rooms", RoomAnnotationViewSet, basename="annotation-room")
+# Step 14 (additive): campus editing.
+router.register("labels", CampusLabelViewSet, basename="annotation-label")
+router.register("floors", FloorAnnotationViewSet, basename="annotation-floor")
 router.register("entrances", EntranceAnnotationViewSet, basename="annotation-entrance")
 router.register("stairs", StairAnnotationViewSet, basename="annotation-stair")
 router.register("elevators", ElevatorAnnotationViewSet, basename="annotation-elevator")
@@ -54,4 +64,7 @@ router.register(
 
 urlpatterns = [
     path("", AnnotationSceneView.as_view(), name="annotation-scene"),
+    path("rooms/new/", RoomCreateView.as_view(), name="annotation-room-create"),
+    path("rooms/<int:pk>/remove/", RoomRemoveView.as_view(), name="annotation-room-remove"),
+    path("buildings/", BuildingCreateView.as_view(), name="annotation-building-create"),
 ] + router.urls

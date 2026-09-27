@@ -27,6 +27,9 @@ export interface HandoffPayload {
   /** Navigation API route ids by destination id, for stops the kiosk
    * routed; the phone loads them with GET /navigation/routes/{id}. */
   t?: Record<string, number>;
+  /** QR Sessions API session and its qr_token, when the server issued one:
+   * the phone reports the scan with it. */
+  q?: [string, string];
   /** Issued-at and expiry, in epoch seconds. */
   iat: number;
   exp: number;
@@ -37,6 +40,8 @@ export interface HandoffSession {
   building: BuildingConfig;
   destinations: Destination[];
   expiresAt: Date;
+  /** The server's QR session, to report the scan to. */
+  qr?: { id: string; token: string };
 }
 
 export type HandoffResolution =
@@ -47,7 +52,8 @@ export function createHandoff(
   building: BuildingConfig,
   queue: readonly Destination[],
   issuedAtMs: number,
-  sessionId: string
+  sessionId: string,
+  qr?: { id: string; token: string } | null
 ): HandoffPayload {
   const iat = Math.floor(issuedAtMs / 1000);
   const labels: NonNullable<HandoffPayload["r"]> = {};
@@ -64,6 +70,7 @@ export function createHandoff(
     d: queue.map(item => item.id),
     ...(Object.keys(labels).length ? { r: labels } : {}),
     ...(Object.keys(routes).length ? { t: routes } : {}),
+    ...(qr ? { q: [qr.id, qr.token] as [string, string] } : {}),
     iat,
     exp: iat + HANDOFF_TTL_SECONDS,
   };
@@ -118,6 +125,10 @@ export function decodeHandoff(token: string): HandoffPayload | null {
           Object.values(data.t).every(
             id => Number.isInteger(id) && (id as number) > 0
           ))) &&
+      (data.q === undefined ||
+        (Array.isArray(data.q) &&
+          data.q.length === 2 &&
+          data.q.every(part => typeof part === "string" && part.length > 0))) &&
       Number.isInteger(data.iat) &&
       Number.isInteger(data.exp) &&
       (data.exp as number) > (data.iat as number);
@@ -183,6 +194,7 @@ export function resolveHandoff(
       building,
       destinations: destinations as Destination[],
       expiresAt: new Date(payload.exp * 1000),
+      ...(payload.q ? { qr: { id: payload.q[0], token: payload.q[1] } } : {}),
     },
   };
 }

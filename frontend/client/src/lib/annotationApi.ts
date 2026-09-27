@@ -1,10 +1,11 @@
 /* Map Annotation data: the building's floors, rooms and navigation graph
  * (nodes, edges, floor transitions) from the Map and Annotation APIs, and
  * the edits the page saves straight away. Positions are converted between
- * the model's coordinates and stored geometry (lib/mapCoordinates.ts). */
+ * the building model's coordinates and stored geometry (campus coordinates;
+ * lib/mapCoordinates.ts), using the building's placement in the campus. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { Point3 } from "@/data/navigation";
+import type { BuildingPlacement, Point3 } from "@/data/navigation";
 import {
   apiClient,
   describeApiError,
@@ -12,7 +13,19 @@ import {
   isApiConfigured,
 } from "./api";
 import { keys } from "./adminApi";
-import { modelToStored, storedToModel } from "./mapCoordinates";
+import {
+  buildingToCampus,
+  campusToBuilding,
+  modelToStored,
+  storedToModel,
+} from "./mapCoordinates";
+
+/** Stored geometry → the building model's coordinates. */
+const toModel = (placement: BuildingPlacement | undefined, stored: number[]) =>
+  campusToBuilding(placement, storedToModel(stored));
+/** The building model's coordinates → stored geometry. */
+const toStored = (placement: BuildingPlacement | undefined, point: Point3) =>
+  modelToStored(buildingToCampus(placement, point));
 
 export type NodeType =
   | "room"
@@ -28,7 +41,8 @@ export const NODE_COLORS: Record<NodeType, string> = {
   auxiliary: "#b7860b",
   kiosk: "#17365d",
   sensor: "#16803c",
-  area_entrance: "#7c3aed",
+  // Not purple: that ring marks points linked to another floor.
+  area_entrance: "#0f8a8a",
 };
 
 export interface AnnotationArea {
@@ -42,6 +56,8 @@ export interface AnnotationFloor {
   floor_order: number;
   glb_node_name: string | null;
   elevation: string | null;
+  display_name?: string | null;
+  short_name?: string | null;
 }
 export interface AnnotationRoom {
   id: number;
@@ -69,6 +85,8 @@ export interface GraphTransition {
   transition_type: TransitionType;
   from_node: number | null;
   to_node: number | null;
+  /** Off: out of service (routes avoid it, and say so). */
+  active: boolean;
 }
 export interface Graph {
   nodes: GraphNode[];
@@ -132,8 +150,10 @@ export function useAreaRooms(areaId: number | null) {
   });
 }
 
-/** The building's whole graph (every floor), so floor links show too. */
-export function useGraph(areaId: number | null) {
+/** The building's whole graph (every floor), so floor links show too.
+ * `placement`: where the building stands in the campus (none for the
+ * kiosk's own building). */
+export function useGraph(areaId: number | null, placement?: BuildingPlacement) {
   return useQuery({
     queryKey: graphKey(areaId),
     enabled: isApiConfigured() && areaId !== null,
@@ -144,7 +164,7 @@ export function useGraph(areaId: number | null) {
       return {
         nodes: scene.nodes.map(({ geometry, ...node }) => ({
           ...node,
-          position: storedToModel(geometry.coordinates),
+          position: toModel(placement, geometry.coordinates),
         })),
         edges: scene.edges,
         transitions: scene.floor_transitions,
@@ -183,20 +203,38 @@ function useGraphEdit<Input>(
   });
 }
 
-export function useGraphEdits(areaId: number | null) {
+export function useGraphEdits(
+  areaId: number | null,
+  placement?: BuildingPlacement
+) {
   const addNode = useGraphEdit(areaId, (node: NewNode) =>
     apiClient.post(endpointMap.annotation.nodes, {
       floor: node.floor,
       room: node.room ?? null,
       name: node.name,
       node_type: node.node_type,
-      geometry: { type: "Point", coordinates: modelToStored(node.position) },
+      geometry: {
+        type: "Point",
+        coordinates: toStored(placement, node.position),
+      },
       connection_mode: node.previousNodeId ? "place_order" : "no_connection",
       previous_node_id: node.previousNodeId ?? null,
     })
   );
   const removeNode = useGraphEdit(areaId, (id: number) =>
     apiClient.delete(endpointMap.annotation.node(String(id)))
+  );
+  // Its connections are redrawn by the server (PATCH is additive to the API
+  // design: moving a point is the only change it takes).
+  const moveNode = useGraphEdit(
+    areaId,
+    (move: { id: number; position: Point3 }) =>
+      apiClient.patch(endpointMap.annotation.node(String(move.id)), {
+        geometry: {
+          type: "Point",
+          coordinates: toStored(placement, move.position),
+        },
+      })
   );
   const connect = useGraphEdit(areaId, (pair: { from: number; to: number }) =>
     apiClient.post(endpointMap.annotation.edges, {
@@ -219,7 +257,28 @@ export function useGraphEdits(areaId: number | null) {
   const unlinkFloors = useGraphEdit(areaId, (id: number) =>
     apiClient.delete(endpointMap.annotation.transition(String(id)))
   );
-  return { addNode, removeNode, connect, disconnect, linkFloors, unlinkFloors };
+  /** Puts stairs or an elevator (all its floor links) in or out of service. */
+  const setInService = useGraphEdit(
+    areaId,
+    (change: { ids: number[]; active: boolean }) =>
+      Promise.all(
+        change.ids.map(id =>
+          apiClient.patch(endpointMap.annotation.transition(String(id)), {
+            active: change.active,
+          })
+        )
+      )
+  );
+  return {
+    addNode,
+    removeNode,
+    moveNode,
+    connect,
+    disconnect,
+    linkFloors,
+    unlinkFloors,
+    setInService,
+  };
 }
 
 export interface RoomDetails {
@@ -268,5 +327,206 @@ export function useRoomEdit(areaId: number | null) {
     },
     onError: error =>
       toast.error(describeApiError(error, "The room couldn't be saved.")),
+  });
+}
+
+/** A staircase or elevator as the admin thinks of it: its floor links
+ * grouped by name ("Elevator (1F)" and "Elevator (2F)" are one elevator). */
+export interface ServiceGroup {
+  key: string;
+  name: string;
+  type: TransitionType;
+  ids: number[];
+  /** In service when every link is on. */
+  active: boolean;
+}
+
+export function serviceGroups(
+  transitions: readonly GraphTransition[],
+  nameOf: (id: number | null) => string | undefined
+): ServiceGroup[] {
+  const groups = new Map<string, ServiceGroup>();
+  for (const link of transitions) {
+    const base = (nameOf(link.from_node) ?? "")
+      .replace(/\s*\(?\b\d+F\b\)?\s*$/i, "")
+      .trim();
+    const name =
+      base || (link.transition_type === "elevator" ? "Elevator" : "Stairs");
+    const key = `${link.transition_type}:${name}`;
+    const group = groups.get(key) ?? {
+      key,
+      name,
+      type: link.transition_type,
+      ids: [],
+      active: true,
+    };
+    group.ids.push(link.id);
+    group.active = group.active && link.active;
+    groups.set(key, group);
+  }
+  return Array.from(groups.values()).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+}
+
+// ---------------------------------------------------------------- the campus (step 14)
+
+export interface CampusLabel {
+  id: number;
+  name: string;
+  /** Campus coordinates (the kiosk building's model's). */
+  position: Point3;
+}
+
+const labelsKey = ["campus-labels"] as const;
+
+/** The campus view's names. */
+export function useCampusLabels() {
+  return useQuery({
+    queryKey: labelsKey,
+    enabled: isApiConfigured(),
+    queryFn: async (): Promise<CampusLabel[]> =>
+      (
+        await apiClient.get<
+          { id: number; name: string; geometry: { coordinates: number[] } }[]
+        >(endpointMap.annotation.labels)
+      ).map(label => ({
+        id: label.id,
+        name: label.name,
+        position: storedToModel(label.geometry.coordinates),
+      })),
+  });
+}
+
+/** Saves one campus change, then refreshes the labels, the buildings (the
+ * kiosk's registry) and the walkways' graph. */
+function useCampusEdit<Input>(run: (input: Input) => Promise<unknown>) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: run,
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: labelsKey });
+      void client.invalidateQueries({ queryKey: ["building-registry"] });
+      void client.invalidateQueries({ queryKey: ["annotation-graph"] });
+      void client.invalidateQueries({ queryKey: ["annotation-areas"] });
+      void client.invalidateQueries({ queryKey: ["annotation-floors"] });
+      void client.invalidateQueries({ queryKey: ["annotation-rooms"] });
+      void client.invalidateQueries({ queryKey: ["kiosk-directory"] });
+    },
+    onError: error =>
+      toast.error(describeApiError(error, "The change couldn't be saved.")),
+  });
+}
+
+const pointGeometry = (position: Point3) => ({
+  type: "Point",
+  coordinates: modelToStored(position),
+});
+
+export function useCampusEdits() {
+  const addLabel = useCampusEdit((label: { name: string; position: Point3 }) =>
+    apiClient.post(endpointMap.annotation.labels, {
+      name: label.name,
+      geometry: pointGeometry(label.position),
+    })
+  );
+  const editLabel = useCampusEdit(
+    (label: { id: number; name?: string; position?: Point3 }) =>
+      apiClient.patch(endpointMap.annotation.label(String(label.id)), {
+        ...(label.name !== undefined ? { name: label.name } : {}),
+        ...(label.position ? { geometry: pointGeometry(label.position) } : {}),
+      })
+  );
+  const removeLabel = useCampusEdit((id: number) =>
+    apiClient.delete(endpointMap.annotation.label(String(id)))
+  );
+  /** Where a building stands; its navigation points move with it. */
+  const placeBuilding = useCampusEdit(
+    (move: { areaId: number; placement: BuildingPlacement | null }) =>
+      apiClient.patch(endpointMap.map.area(String(move.areaId)), {
+        placement: move.placement && {
+          position: move.placement.position,
+          rotation_y: move.placement.rotationY,
+        },
+      })
+  );
+  /** Where routes into a building added from the admin panel arrive (its
+   * model's coordinates): the kiosk's entrance marker. */
+  const setEntrance = useCampusEdit(
+    async (entrance: { areaId: number; start: Point3 }) => {
+      const area = await apiClient.get<{
+        map_settings: Record<string, unknown> | null;
+      }>(endpointMap.map.area(String(entrance.areaId)));
+      return apiClient.patch(endpointMap.map.area(String(entrance.areaId)), {
+        map_settings: {
+          ...(area.map_settings ?? {}),
+          start: entrance.start.map(v => Number(v.toFixed(3))),
+          start_label: "Entrance",
+        },
+      });
+    }
+  );
+  const addBuilding = useCampusEdit(
+    (building: { code: string; name: string; floors: number }) =>
+      apiClient.post<{ id: number; code: string; name: string }>(
+        endpointMap.annotation.buildings,
+        building
+      )
+  );
+  const editFloor = useCampusEdit(
+    (floor: {
+      id: number;
+      display_name?: string;
+      short_name?: string;
+      elevation?: number;
+    }) => {
+      const { id, ...changes } = floor;
+      return apiClient.patch(endpointMap.annotation.floor(String(id)), changes);
+    }
+  );
+  const addFloor = useCampusEdit(
+    (floor: { area: number; floor_order: number }) =>
+      apiClient.post(endpointMap.annotation.floors, floor)
+  );
+  const addRoom = useCampusEdit(
+    (room: {
+      floor: number;
+      room_code: string;
+      room_alias: string;
+      description?: string;
+    }) => apiClient.post(endpointMap.annotation.roomCreate, room)
+  );
+  const removeRoom = useCampusEdit((id: number) =>
+    apiClient.delete(endpointMap.annotation.roomRemove(String(id)))
+  );
+  return {
+    addLabel,
+    editLabel,
+    removeLabel,
+    placeBuilding,
+    setEntrance,
+    addBuilding,
+    editFloor,
+    addFloor,
+    addRoom,
+    removeRoom,
+  };
+}
+
+/** Every building area (with a model or not: a new one waits for its
+ * model), for the picker and the campus editor. */
+export function useAllAreas() {
+  return useQuery({
+    queryKey: ["annotation-areas", "all"],
+    enabled: isApiConfigured(),
+    queryFn: async () =>
+      (
+        await apiClient.getPage<
+          AnnotationArea & {
+            model: { url: string } | null;
+            placement: { position: number[]; rotation_y: number } | null;
+          }
+        >(`${endpointMap.map.areas}?page_size=100`)
+      ).results,
   });
 }

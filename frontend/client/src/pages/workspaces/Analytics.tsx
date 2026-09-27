@@ -24,6 +24,7 @@ import {
   useSemesters,
 } from "@/lib/adminApi";
 import { cn } from "@/lib/utils";
+import { ReportsPanel } from "./reports/ReportsPanel";
 
 const RANGES: [RangeKey, string][] = [
   ["today", "Today"],
@@ -514,13 +515,7 @@ export function Analytics() {
           </Section>
 
           <Section title="Reports and exports">
-            <Panel title="Generate or schedule a report">
-              <p className="text-sm text-[#66768a]">
-                Not available yet. Saving generated reports needs a place to store them (the database
-                schema has no reports table), and PDF output needs a library that isn't in the tech
-                stack. Both are waiting on a team decision (QA-65).
-              </p>
-            </Panel>
+            <ReportsPanel />
           </Section>
         </div>
       )}

@@ -123,6 +123,11 @@ function MapNodeSelect({
   );
 }
 
+/** Unregistered devices, and deleted ones (Register restores them), open the
+ * Register dialog instead of the device panel. */
+const needsRegistering = (device: DeviceRow) =>
+  device.status === "unregistered" || device.status === "decommissioned";
+
 function RegisterDialog({
   device,
   onClose,
@@ -163,9 +168,11 @@ function RegisterDialog({
               Register {device.device_id}
             </DialogTitle>
             <DialogDescription>
-              Discovered over MQTT ({device.device_type}, MAC{" "}
-              {device.mac_address ?? "unknown"}). Registering adds it to the
-              managed FlowSense fleet.
+              {device.status === "decommissioned"
+                ? "This device was deleted from the registry and its messages are ignored. Registering it again brings it back."
+                : device.device_type === "kiosk"
+                  ? "Found when this kiosk screen first reported in. Registering adds it to the managed FlowSense fleet."
+                  : `Discovered over MQTT (MAC ${device.mac_address ?? "unknown"}). Registering adds it to the managed FlowSense fleet.`}
             </DialogDescription>
           </DialogHeader>
           <div className="my-6 space-y-4">
@@ -621,6 +628,7 @@ export function HardwareManagement() {
                     {titleCase(s)}
                   </option>
                 ))}
+                <option value="decommissioned">Deleted</option>
               </NativeSelect>
               <div className="relative sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#93a1b1]" size={16} />
@@ -667,7 +675,7 @@ export function HardwareManagement() {
                     "cursor-pointer transition hover:bg-[#fbfcfe]",
                     selected === device.id && "bg-[#fffaf0]"
                   )}
-                  onClick={() => device.status !== "unregistered" && setSelected(device.id)}
+                  onClick={() => !needsRegistering(device) && setSelected(device.id)}
                 >
                   <td className="px-5 py-4">
                     <p className="text-sm font-semibold text-[#17365d]">
@@ -694,19 +702,23 @@ export function HardwareManagement() {
                   <td className="px-5 py-4 text-right">
                     <Button
                       size="sm"
-                      variant={device.status === "unregistered" ? "default" : "outline"}
+                      variant={needsRegistering(device) ? "default" : "outline"}
                       className={
-                        device.status === "unregistered"
+                        needsRegistering(device)
                           ? "bg-[#f4c542] text-[#17365d] hover:bg-[#e8ba2d]"
                           : "border-[#dbe3ed] text-[#17365d]"
                       }
                       onClick={e => {
                         e.stopPropagation();
-                        if (device.status === "unregistered") setRegistering(device);
+                        if (needsRegistering(device)) setRegistering(device);
                         else setSelected(device.id);
                       }}
                     >
-                      {device.status === "unregistered" ? "Register" : "Manage"}
+                      {device.status === "unregistered"
+                        ? "Register"
+                        : device.status === "decommissioned"
+                          ? "Restore"
+                          : "Manage"}
                     </Button>
                   </td>
                 </tr>

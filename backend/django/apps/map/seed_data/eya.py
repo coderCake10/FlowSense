@@ -12,6 +12,8 @@ Conventions (confirmed by the team; see docs/changes/step-04b-database-conforman
   get "Room EA-###" as their alias (campus.rooms.room_alias is NOT NULL) and
   UNNAMED_DESCRIPTION as their description; they are searchable by code.
 - CAS is "College of Arts and Sciences" (confirmed).
+- EA-216, EA-317, EA-515, EA-516 and EA-517 aren't in the document; the 3D
+  model has doors and signs for them (EYA2), so they're here as unnamed rooms.
 """
 
 CAMPUS = {"code": "AUF", "name": "Angeles University Foundation", "area_type": "campus"}
@@ -70,13 +72,13 @@ ROOMS = {
         ("EA-210A", "Faculty Department of Communication", "office", "EA - 210A (Faculty Dept. of Comm)"),
         ("EA-210B", "Faculty Department of Mathematics", "office", "EA - 210B (Faculty Dept. of Mathematics)"),
         ("EA-211", "Teacher Resource Center", "facility", "EA - 211 (Teacher Resource Center)"),
-        *[(f"EA-{n}", f"Room EA-{n}", "room", None) for n in range(212, 216)],
+        *[(f"EA-{n}", f"Room EA-{n}", "room", None) for n in range(212, 217)],
     ],
     3: [
         *[(f"EA-{n}", f"Room EA-{n}", "room", None) for n in range(301, 308)],
         ("EA-308", "Experimental Research Laboratory", "laboratory", "EA308 (Experimental Research Lab)"),
         ("EA-309", "Psychology Laboratory", "laboratory", "EA309 (Psych Lab)"),
-        *[(f"EA-{n}", f"Room EA-{n}", "room", None) for n in range(310, 317)],
+        *[(f"EA-{n}", f"Room EA-{n}", "room", None) for n in range(310, 318)],
     ],
     4: [(f"EA-{n}", f"Room EA-{n}", "room", None) for n in range(401, 419)],
     5: [
@@ -94,6 +96,7 @@ ROOMS = {
         ("EA-512", "DSP/CAD Laboratory", "laboratory", "EA - 512 - DSP/CAD Laboratory"),
         ("EA-513", "Physics Laboratory", "laboratory", "EA - 513 - Physics Laboratory"),
         ("EA-514", "Supply and Instrument Room, Physics and Communication Laboratories", "service", "EA - 514 - Supply and Instrument Room/ Physics and Communication Laboratories"),
+        *[(f"EA-{n}", f"Room EA-{n}", "room", None) for n in range(515, 518)],
     ],
     6: [
         ("EA-601", "Room EA-601", "room", None),
@@ -118,37 +121,18 @@ ENTRANCES = [
     {"name": "EYA first floor exit near EA-106", "entrance_type": "exit", "is_primary": False},
 ]
 
-# First-floor routes from the kiosk to three offices, in model coordinates
-# (glTF x, y, z; y up). These are the kiosk's original hand-placed routes,
-# loaded as a navigation graph so routing works before the floor is annotated
-# in Map Annotation (python manage.py seed_eya_routes).
-DEMO_KIOSK = {"name": "EYA lobby kiosk", "position": (0, 1.02, 28.5)}
-# Corridor junctions: (key, position). The east walkway runs between the
-# columns (x 3.46) and the east wall (inner face 5.89, fire extinguishers
-# to 5.73), through the east turnstile lane (x 4.01-4.83): x = 4.5 keeps
-# the route in the middle of both, clear of the wall.
-DEMO_JUNCTIONS = [
-    ("west-lobby", (-4.6, 1.02, 28.5)),
-    ("west-101", (-4.6, 1.02, 31.75)),
-    ("east-lobby", (4.5, 1.02, 28.5)),
-    ("east-111", (4.5, 1.02, 1.98)),
-    ("east-110", (4.5, 1.02, -11.85)),
-]
-# Room doors: (room code, position on the corridor side of the door)
-DEMO_ROOM_DOORS = [
-    ("EA-101A", (-5.65, 1.02, 31.75)),
-    ("EA-110", (5.65, 1.02, -11.85)),
-    ("EA-111", (5.65, 1.02, 1.98)),
-]
-# Walkable connections between the points above ("kiosk" is the kiosk node).
-DEMO_EDGES = [
-    ("kiosk", "west-lobby"),
-    ("west-lobby", "west-101"),
-    ("west-101", "EA-101A"),
-    ("kiosk", "east-lobby"),
-    ("east-lobby", "east-111"),
-    ("east-111", "EA-111"),
-    ("east-111", "east-110"),
-    ("east-110", "EA-110"),
+# The navigation network (corridors, every room's door, stairs, elevator and
+# the kiosk on all six floors) is generated from the 3D model into
+# eya_navigation.json by frontend/scripts/blender/build_navigation.py and
+# loaded by `python manage.py seed_eya_routes`.
+NAVIGATION_FILE = "eya_navigation.json"
+
+# Names in the kiosk's campus view (Map Annotation's Campus view edits them
+# after seed_campus adds them). Campus coordinates (glTF: metres, Y up).
+CAMPUS_LABELS = [
+    ("Overpass", (-81.2, 7.0, 62.0)),
+    ("Professional School", (-72.7, 18.0, 2.4)),
+    # The arena: the 60 x 60 m, 18 m block across the highway from EYA.
+    ("Sports and Cultural Center (SCC)", (-124.0, 23.0, 110.9)),
 ]
 

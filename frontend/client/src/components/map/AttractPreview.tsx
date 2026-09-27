@@ -13,6 +13,7 @@ import {
   RoutePath,
 } from "./BuildingScene";
 import { useBuildingModel } from "./buildingModel";
+import { useLiveBuilding } from "@/lib/liveModel";
 
 /** How long each phase (outside, then inside with a route) lasts (ms). */
 const PHASE_MS = 7000;
@@ -56,13 +57,14 @@ function PreviewScene({
 }
 
 export function AttractPreview({
-  building,
+  building: configured,
   onReady,
 }: {
   building: BuildingConfig;
   /** Called once the model is showing (so the page can drop its placeholder). */
   onReady: () => void;
 }) {
+  const { building, pending, onModelError } = useLiveBuilding(configured);
   const [view, setView] = useState<MapView>(BUILDING_VIEW);
   const [ready, setReady] = useState(false);
   const [still] = useState(
@@ -86,8 +88,13 @@ export function AttractPreview({
     );
     return () => window.clearInterval(timer);
   }, [building, still, ready]);
+  if (pending) return null;
   return (
-    <ModelErrorBoundary fallback={null}>
+    <ModelErrorBoundary
+      key={building.modelUrl}
+      fallback={null}
+      onError={onModelError}
+    >
       <Canvas
         orthographic
         frameloop="demand"

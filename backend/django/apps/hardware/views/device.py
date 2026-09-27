@@ -38,25 +38,31 @@ def _conflict(error):
 
 
 class _DeviceQueryMixin:
-    """Registry filters: ?device_type=, ?status=, ?search= (name, device ID, or MAC)."""
+    """Registry filters: ?device_type=, ?status=, ?search= (name, device ID, or MAC).
+    Deleted (decommissioned) devices are hidden, except with
+    ?status=decommissioned, and for Register (which restores one)."""
 
     device_type = None
     pagination_class = StandardPagination
 
     def get_queryset(self):
-        queryset = Device.objects.select_related(*RELATED).filter(deleted_at__isnull=True).order_by("name", "device_id")
+        wanted = self.request.query_params.get("status", "").lower()
+        queryset = Device.objects.select_related(*RELATED).order_by("name", "device_id")
+        if wanted == Device.STATUS_DECOMMISSIONED:
+            queryset = queryset.filter(status=Device.STATUS_DECOMMISSIONED)
+        elif getattr(self, "action", None) != "register":
+            queryset = queryset.filter(deleted_at__isnull=True)
         if self.device_type:
             queryset = queryset.filter(device_type=self.device_type).exclude(status=Device.STATUS_UNREGISTERED)
         params = self.request.query_params
         if params.get("device_type"):
             queryset = queryset.filter(device_type=params["device_type"].lower())
-        wanted = params.get("status", "").lower()
         if wanted in (Device.STATUS_ONLINE, Device.STATUS_OFFLINE):
             # Online/offline is worked out from the last ping (services.effective_status).
             ids = [d.id for d in queryset.filter(status__in=services.ACTIVE_STATUSES)
                    if services.effective_status(d) == wanted]
             queryset = queryset.filter(id__in=ids)
-        elif wanted:
+        elif wanted and wanted != Device.STATUS_DECOMMISSIONED:
             queryset = queryset.filter(status=wanted)
         if params.get("search"):
             term = params["search"]
@@ -75,7 +81,7 @@ class DeviceViewSet(_DeviceQueryMixin, mixins.ListModelMixin, mixins.RetrieveMod
     GET    /hardware/devices/{id}                    device details
     PATCH  /hardware/devices/{id}                    name, map node, zone, floor, sampling interval
     DELETE /hardware/devices/{id}                    decommission (soft delete)
-    POST   /hardware/devices/{id}/register           register a discovered device
+    POST   /hardware/devices/{id}/register           register a discovered device, or restore a deleted one
     POST   /hardware/devices/{id}/commands/{command} enable, disable, ping, restart
     """
 

@@ -23,12 +23,34 @@ export interface Destination {
   /** The Navigation API route (`GET /navigation/routes/{id}`), so the phone
    * handoff can load the same route without requesting a new one. */
   routeId?: number;
+  /** What the visitor should know, e.g. "The elevator is out of service." */
+  notices?: string[];
 }
 
 export interface RouteLeg {
-  /** `ModelFloor.object` the leg is on. */
+  /** `ModelFloor.object` the leg is on, or `CAMPUS_FLOOR` for a walk
+   * between buildings (drawn in the campus view). */
   floor: string;
+  /** Id of the building the leg is in (its points are in that building's
+   * model coordinates; a campus leg: the campus's host building). Missing:
+   * the destination's building. */
+  building?: string;
   points: Point3[];
+  /** How the route leaves this floor for the next leg's, when the
+   * Navigation API says ("stairs", "elevator", …); on a campus leg,
+   * "overpass" when it crosses the highway on the overpass. */
+  via?: string;
+}
+
+/** `RouteLeg.floor` of a walk outside, between buildings. */
+export const CAMPUS_FLOOR = "campus";
+
+/** Where a building stands in the campus: its model turned `rotationY`
+ * (radians) about the vertical axis, then moved to `position` (campus
+ * coordinates: the kiosk building's model's). */
+export interface BuildingPlacement {
+  position: Point3;
+  rotationY: number;
 }
 
 /** One floor of the building model. */
@@ -47,6 +69,8 @@ export interface ModelFloor {
 /** A building shown around the kiosk's building in the campus view. */
 export interface CampusNeighbour {
   name: string;
+  /** Its area code: Asset Management's live model replaces `modelUrl`. */
+  areaCode?: string;
   modelUrl: string;
   /** Placement in the kiosk building's model coordinates. */
   position: Point3;
@@ -59,6 +83,9 @@ export interface CampusNeighbour {
 /** The low-detail neighbourhood around the kiosk's building. */
 export interface CampusConfig {
   name: string;
+  /** The campus's area code in the Map API: Asset Management's live area
+   * model for it replaces `modelUrl`. */
+  areaCode: string;
   /** Surrounding streets, buildings and trees, in the building's
    * coordinates (scripts/blender/build_campus_model.py). */
   modelUrl: string;
@@ -107,4 +134,7 @@ export interface BuildingConfig {
   destinations: Destination[];
   /** The campus around the building, when a campus model exists. */
   campus?: CampusConfig;
+  /** Where the building stands in the campus. Missing for the kiosk's own
+   * building, whose model coordinates are the campus's. */
+  placement?: BuildingPlacement;
 }

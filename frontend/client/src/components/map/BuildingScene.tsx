@@ -34,12 +34,16 @@ import { applyLift, type Part, type PreparedModel } from "./buildingModel";
 
 /** Renders `fallback` when the model can't be loaded or drawn. */
 export class ModelErrorBoundary extends Component<
-  { children: ReactNode; fallback: ReactNode },
+  { children: ReactNode; fallback: ReactNode; onError?: () => void },
   { failed: boolean }
 > {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
+  }
+  /** Lets the page fall back to the bundled model (lib/liveModel). */
+  componentDidCatch() {
+    this.props.onError?.();
   }
   render() {
     return this.state.failed ? this.props.fallback : this.props.children;

@@ -63,7 +63,28 @@ also run `npm run qa:step4a` end to end against the real backend.
 | 3 | **Revised:** building models installed locally, not in git (GitHub can't hold the complete models). The original 3D work (isometric view, view-hierarchy Back, floor focus, Draco, A Building coordinates, GLB in Map Annotation) is deferred until the models are installed locally. | Done, see [change record](../changes/step-03-local-models.md) |
 | 4a | Backend platform: `/api/v1` layout, secure defaults, sign-in completed (email, rate limits, link), `create_admin`, route guard, test runner | Done, see [change record](../changes/step-04a-platform-and-auth.md) |
 | 4b | Database conformance (DB-1 to DB-5) and EYA room seed | Done, see [change record](../changes/step-04b-database-conformance.md) |
-| 4c+ | Missing API areas (settings, alerts, activity, system, analytics, assets) and kiosk device auth | Planned |
+| 4 (follow-ups) | ESP32 → MQTT → database pipeline fixes; stack decisions (Settings moved to `common`, npm) | Done, see [change record](../changes/step-04-hardware-mqtt-pipeline.md) |
+| 5a | Hardware, Alerts, Activity, Dashboard, Settings, and System APIs | Done, see [change record](../changes/step-05a-admin-apis.md) |
+| 5b | Dashboard, Hardware, Users, and Settings pages connected to the API | Done, see [change record](../changes/step-05b-admin-pages.md) |
+| 5c | OpenAPI envelope on every endpoint; kiosk heartbeat and visitor sessions | Done, see [change record](../changes/step-05c-envelope-and-kiosk.md) |
+| 6 | Analytics API and page (reports excluded, QA-65) | Done, see [change record](../changes/step-06-analytics.md) |
+| 7a | The complete EYA model in the kiosk (Draco-compressed, committed) | Done, see [change record](../changes/step-07a-eya-model.md) |
+| 7b | Kiosk 3D map: whole-building view, floors, animated routes, 3D attract preview | Done, see [change record](../changes/step-07b-kiosk-3d-map.md) |
+| 8a | Kiosk search and routes from the APIs; attract screen waits for a tap | Done, see [change record](../changes/step-08a-kiosk-live-search.md) |
+| 8b | Map Annotation on the real model; multi-floor routes | Done, see [change record](../changes/step-08b-map-annotation.md) |
+| 8c | Edit a room's number, name and purpose in Map Annotation | Done, see [change record](../changes/step-08c-room-details.md) |
+| 8d | Phone handoff with the kiosk's route and step-by-step directions | Done, see [change record](../changes/step-08d-mobile-directions.md) |
+| 8e | Destination Queue in the shortest walking order | Done, see [change record](../changes/step-08e-queue-order.md) |
+| 9a | Campus view with the A Building, the neighbourhood and the overpass | Done, see [change record](../changes/step-09a-campus-view.md) |
+| Audit 1 | Dead and misleading buttons; out-of-date documents | Done, see [change record](../changes/audit-01-system-check.md) |
+| 10 | Assets API; Asset Management connected; the kiosk, attract screen and Map Annotation load the live model | Done, see [change record](../changes/step-10-assets.md) |
+| 11 | Analytics reports: snapshots in `analytics.reports`, printable page (PDF), CSV ZIP | Done, see [change record](../changes/step-11-reports.md) |
+| 12 | EYA routes for all 97 rooms, generated from the model (stairs, lift, every floor) | Done, see [change record](../changes/step-12-generated-routes.md) |
+| 12b | Route fixes: straight routes, the lift as an obstacle, multi-floor steps, drag to move points | Done, see [change record](../changes/step-12b-route-fixes.md) |
+| 12c | Follow on the kiosk (route playback), stairs and elevators out of service, QR analytics | Done, see [change record](../changes/step-12c-kiosk-follow-and-service.md) |
+| 9b | A Building rooms, floors, search and Map Annotation | Planned |
+| 9c | Routes between the buildings over the overpass | Planned |
+| Later | Scheduled reports (QA-99); floor editing in Asset Management (QA-93); kiosk device authentication; Location Details sidebar and Area level (QA-26) | Planned |
 
 The source of truth for the database and API is `architecture-notes-main`
 (06 Database, 07 API). Deviations are tracked in the

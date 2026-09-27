@@ -4,7 +4,8 @@ The area file (LFA_AUF.obj, a TopoExport OBJ in metres, Z up, x east,
 y north) covers a large part of Angeles City. This script keeps only a
 rectangular tile around the EYA Building and the A Building, leaves out the two
 blocks that stand in for them (the detailed models replace those), adds a
-simple overpass across MacArthur Highway, gives everything plain colours, and
+simple overpass across MacArthur Highway, drops the trees the area file puts
+in the middle of the highway, gives everything plain colours, and
 moves it into the EYA model's coordinates so it lines up with the kiosk's
 existing map and navigation points. Run it with Blender (4.2 or later):
 
@@ -50,6 +51,12 @@ OVERPASS = {
     "rail": 1.1,
 }
 
+# MacArthur Highway between the two rows of blocks, in EYA model coordinates
+# (Blender Y, metres; the road runs along X). The area file has a row of trees
+# down its middle, which isn't there: trees centred in this band are dropped.
+# The pavements' trees, next to the blocks, stay.
+HIGHWAY_MEDIAN_Y = (-72.0, -42.0)
+
 def srgb(hex_colour):
     """#rrggbb as Blender's linear colour, so the model shows that colour."""
     def channel(c):
@@ -85,6 +92,10 @@ def to_eya_matrix():
 
 def in_tile(point):
     return TILE_X[0] <= point.x <= TILE_X[1] and TILE_Y[0] <= point.y <= TILE_Y[1]
+
+
+def on_highway(point):
+    return HIGHWAY_MEDIAN_Y[0] <= point.y <= HIGHWAY_MEDIAN_Y[1]
 
 
 def centre(obj):
@@ -184,7 +195,10 @@ def main():
         if name.startswith("TPX_Ground"):
             ground = obj
             continue
-        keep = name not in (EYA_BLOCK, A_BLOCK) and in_tile(centre(obj))
+        middle = centre(obj)
+        keep = name not in (EYA_BLOCK, A_BLOCK) and in_tile(middle)
+        if name.startswith("TPX_Trees") and on_highway(middle):
+            keep = False
         if not keep:
             bpy.data.objects.remove(obj)
         elif name.startswith("TPX_Trees"):

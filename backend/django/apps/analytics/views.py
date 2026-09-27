@@ -5,8 +5,11 @@ Alerts API   /api/v1/alerts, /alerts/{id}, /alerts/{id}/acknowledge, /alerts/{id
 Activity API /api/v1/activity, /activity/{id}
 Analytics    /api/v1/analytics/dashboard, /navigation, /search, /kiosks, /sensors,
              /spatial, /system, /activity, /qr, /qr/events (?range=, see ranges.py)
+Reports      /api/v1/analytics/reports, /analytics/reports/{id} (see reports.py)
 All admin only (the project's default permission).
 """
+from django.db import transaction
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import mixins, status, viewsets
@@ -15,10 +18,16 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from analytics import audit, dashboard, metrics
-from analytics.models import Alert, AuditEvent, QrEvent
+from analytics import audit, dashboard, metrics, reports
+from analytics.models import Alert, AuditEvent, QrEvent, Report
 from analytics.ranges import parse_range
-from analytics.serializers import AlertSerializer, AuditEventSerializer
+from analytics.serializers import (
+    AlertSerializer,
+    AuditEventSerializer,
+    ReportDetailSerializer,
+    ReportRequestSerializer,
+    ReportSerializer,
+)
 from common.pagination import StandardPagination
 
 
@@ -84,7 +93,8 @@ class AlertViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Ge
 
 
 class ActivityViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    """Audit trail, newest first. ?event_type=, ?action=, ?admin_user=, ?entity_type=, ?from=, ?to="""
+    """Audit trail, newest first. ?event_type=, ?action=, ?admin_user=, ?entity_type=, ?from=, ?to=
+    event_type, action and entity_type accept a comma-separated list."""
 
     serializer_class = AuditEventSerializer
     pagination_class = StandardPagination
@@ -94,7 +104,7 @@ class ActivityViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
         params = self.request.query_params
         for param in ("event_type", "action", "entity_type"):
             if params.get(param):
-                queryset = queryset.filter(**{param: params[param]})
+                queryset = queryset.filter(**{f"{param}__in": params[param].split(",")})
         if params.get("admin_user"):
             queryset = queryset.filter(admin_user_id=params["admin_user"])
         return _date_filter(queryset, params, "created_at")
@@ -175,3 +185,52 @@ class QrEventListView(APIView):
              "created_at": e.created_at}
             for e in page
         ])
+
+
+class ReportViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """
+    GET  /analytics/reports                    generated reports, newest first
+    POST /analytics/reports                    generate one (Celery); poll GET /{id} until completed
+    GET  /analytics/reports/{id}               the report with its snapshot (for the printable page)
+    GET  /analytics/reports/{id}?download=csv  the snapshot as a ZIP of CSV files
+    """
+
+    pagination_class = StandardPagination
+    queryset = Report.objects.select_related("generated_by").order_by("-created_at", "-id")
+
+    def get_serializer_class(self):
+        return ReportSerializer if self.action == "list" else ReportDetailSerializer
+
+    def create(self, request):
+        from analytics.tasks import generate_report
+
+        body = ReportRequestSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        values = body.validated_data
+        period = parse_range({k: v for k, v in request.data.items() if k in (
+            "range", "start_date", "end_date", "semester_id")} | {"range": values["range"]})
+        report = Report.objects.create(
+            title=values.get("title") or f"FlowSense analytics, {reports.period_label(period.start, period.end)}",
+            sections=values["sections"],
+            period_start=period.start,
+            period_end=period.end,
+            filters={"range": period.key},
+            format=values["format"],
+            generated_by=request.admin_user,
+        )
+        audit.record(request, AuditEvent.TYPE_ADMINISTRATIVE, AuditEvent.ACTION_CREATE, report,
+                     f"Generated report #{report.pk}: {report.title}",
+                     {"sections": report.sections, "format": report.format})
+        transaction.on_commit(lambda: generate_report.delay(report.pk))
+        report.refresh_from_db()
+        return Response(ReportSerializer(report).data, status=status.HTTP_202_ACCEPTED)
+
+    def retrieve(self, request, pk=None):
+        report = self.get_object()
+        if request.query_params.get("download") == "csv":
+            if report.status != Report.STATUS_COMPLETED:
+                return Response({"detail": "This report isn't ready yet."}, status=status.HTTP_409_CONFLICT)
+            response = HttpResponse(reports.csv_zip(report), content_type="application/zip")
+            response["Content-Disposition"] = f'attachment; filename="flowsense-report-{report.pk}.zip"'
+            return response
+        return Response(ReportDetailSerializer(report).data)

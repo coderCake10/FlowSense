@@ -75,8 +75,7 @@ export function AttractionPage() {
             Find your way with FlowSense.
           </h1>
           <p className="mt-6 max-w-md text-base leading-7 text-white/54">
-            Interactive 3D directions for every destination at Angeles
-            University Foundation.
+            Interactive 3D directions for every destination at AUF - EYA Building and A Building .
           </p>
           <div className="mt-9 inline-flex items-center gap-3 rounded-full border border-[#f4c542]/40 bg-[#f4c542]/10 px-5 py-3 text-sm font-bold text-[#f8d96a]">
             <span className="size-2 animate-pulse rounded-full bg-[#f4c542]" />
@@ -134,6 +133,14 @@ export function AttractionPage() {
         <p className="absolute bottom-3 right-4 text-[11px] text-white/45">
           Kiosk ID {kiosk.device_id} · waiting for registration in Hardware
           Management
+        </p>
+      )}
+      {kiosk?.status === "decommissioned" && (
+        // Deleted on the Hardware page: its visits aren't counted until an
+        // admin restores it (status filter "Deleted", then Restore).
+        <p className="absolute bottom-3 right-4 text-[11px] text-white/45">
+          Kiosk ID {kiosk.device_id} · deleted in Hardware Management. Restore
+          it there (status: Deleted)
         </p>
       )}
     </main>

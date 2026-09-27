@@ -25,7 +25,8 @@ import {
 } from "@/components/ui/dialog";
 import { BrandMark } from "@/components/FlowSenseShell";
 import { RouteSketch } from "@/components/RouteSketch";
-import { buildings } from "@/data/buildings";
+import type { BuildingConfig } from "@/data/navigation";
+import { useBuildingRegistry } from "@/lib/buildingRegistry";
 import {
   HANDOFF_QUERY_PARAM,
   currentStopIndex,
@@ -36,6 +37,7 @@ import {
 import { isApiConfigured } from "@/lib/api";
 import { fetchSavedRoute } from "@/lib/kioskDirectory";
 import { routeSteps, type StepKind } from "@/lib/routeSteps";
+import { reportScan } from "@/lib/qrSessions";
 import { cn } from "@/lib/utils";
 
 /* Per-phone progress, keyed by handoff session. Storage can be unavailable
@@ -65,7 +67,7 @@ function saveProgress(sessionId: string, reached: string[]) {
   }
 }
 
-function readHandoff(): HandoffResolution {
+function readHandoff(buildings: readonly BuildingConfig[]): HandoffResolution {
   const token = new URLSearchParams(window.location.search).get(
     HANDOFF_QUERY_PARAM
   );
@@ -109,11 +111,19 @@ const PROBLEMS = {
 } as const;
 
 export function MobilePage() {
-  const [resolution] = useState(readHandoff);
+  // Buildings added from the admin panel come from the API: wait for it,
+  // then read the code once.
+  const { buildings, ready } = useBuildingRegistry();
+  const [resolution, setResolution] = useState<HandoffResolution | null>(null);
+  if (ready && resolution === null) setResolution(readHandoff(buildings));
   return (
     <div className="min-h-screen bg-[#f7f9fc] text-[#102c4d]">
       <MobileHeader />
-      {resolution.status === "ok" ? (
+      {resolution === null ? (
+        <p role="status" className="py-16 text-center text-sm text-[#718398]">
+          Loading your route…
+        </p>
+      ) : resolution.status === "ok" ? (
         <RoutedChecklist session={resolution.session} />
       ) : (
         <main className="mx-auto max-w-xl px-5 py-16 text-center">
@@ -136,13 +146,15 @@ export function MobilePage() {
  * shows the checklist. A route that can't be loaded keeps the stop's
  * built-in route, or none. */
 function RoutedChecklist({ session }: { session: HandoffSession }) {
+  const { buildings } = useBuildingRegistry();
   const routed = isApiConfigured()
     ? session.destinations.filter(item => item.routeId)
     : [];
   const routes = useQueries({
     queries: routed.map(item => ({
       queryKey: ["handoff-route", item.routeId],
-      queryFn: () => fetchSavedRoute(session.building, item.routeId!, item),
+      queryFn: () =>
+        fetchSavedRoute(session.building, item.routeId!, item, buildings),
       staleTime: Infinity,
       retry: 1,
     })),
@@ -207,6 +219,7 @@ const STEP_ICONS: Record<StepKind, typeof ArrowUp> = {
 
 function Checklist({ session }: { session: HandoffSession }) {
   const { building, destinations } = session;
+  const { buildings } = useBuildingRegistry();
   const [reached, setReached] = useState<string[]>(
     () => loadProgress(session.id) ?? []
   );
@@ -219,10 +232,13 @@ function Checklist({ session }: { session: HandoffSession }) {
   const stop = done ? null : destinations[current];
 
   // Record that this phone started the session, so a reload after the QR's
-  // 15 minutes still opens the checklist.
+  // 15 minutes still opens the checklist. The first opening is the scan:
+  // the server counts it (Analytics: QR scanned).
   useEffect(() => {
-    if (loadProgress(session.id) === null) saveProgress(session.id, []);
-  }, [session.id]);
+    if (loadProgress(session.id) !== null) return;
+    saveProgress(session.id, []);
+    if (session.qr) void reportScan(session.qr);
+  }, [session.id, session.qr]);
 
   const confirmArrival = () => {
     if (!stop) return;
@@ -237,13 +253,16 @@ function Checklist({ session }: { session: HandoffSession }) {
     <main className="mx-auto max-w-xl px-5 pb-28 pt-8">
       <div className="mb-6">
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#b08412]">
-          {building.name} · {building.floor}
+          {building.placement
+            ? building.name
+            : `${building.name} · ${building.floor}`}
         </p>
         <h1 className="mt-3 font-display text-3xl font-bold tracking-[-0.06em]">
           {done ? "You've reached every stop" : `To ${stop?.name}`}
         </h1>
         <p className="mt-3 text-xs text-[#718398]">
-          Starting from the {building.startLabel.toLowerCase()} ·{" "}
+          Starting from the {buildings[0].startLabel.toLowerCase()}
+          {building.placement ? ` in the ${buildings[0].name}` : ""} ·{" "}
           {destinations.length} {destinations.length === 1 ? "stop" : "stops"}
         </p>
       </div>
@@ -353,7 +372,7 @@ function Checklist({ session }: { session: HandoffSession }) {
                   {item.points.length >= 2 && (
                     <p className="flex items-center gap-2 text-[11px] text-[#718398]">
                       <span className="size-2.5 rounded-full bg-[#17365d]" />
-                      {building.startLabel}
+                      {buildings[0].startLabel}
                       <span
                         className="ml-2 size-2.5 rounded-full"
                         style={{ background: item.color }}
@@ -361,8 +380,17 @@ function Checklist({ session }: { session: HandoffSession }) {
                       {item.code}
                     </p>
                   )}
+                  {item.notices?.map(notice => (
+                    <p
+                      key={notice}
+                      role="note"
+                      className="mb-2 rounded-lg bg-[#fdf3d0] px-3 py-2 text-sm font-semibold text-[#7a5a00]"
+                    >
+                      {notice}
+                    </p>
+                  ))}
                   {(() => {
-                    const steps = routeSteps(building, item);
+                    const steps = routeSteps(building, item, buildings);
                     return steps.length ? (
                       <ol
                         aria-label={`Directions to ${item.code}`}

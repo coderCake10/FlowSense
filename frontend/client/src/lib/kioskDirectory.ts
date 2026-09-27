@@ -3,10 +3,16 @@
  * is logged for Analytics), and routes from the Navigation API. Without an
  * API the kiosk keeps its built-in demo destinations. */
 import { useQuery } from "@tanstack/react-query";
-import type { BuildingConfig, Destination } from "@/data/navigation";
+import { buildings } from "@/data/buildings";
+import {
+  CAMPUS_FLOOR,
+  type BuildingConfig,
+  type Destination,
+} from "@/data/navigation";
 import { apiClient, endpointMap, isApiConfigured } from "./api";
 import { storedToModel } from "./mapCoordinates";
-import { splitByFloor } from "./mapView";
+import type { FloorPlace } from "./buildingRegistry";
+import { splitByFloor, splitByStops, type RouteStop } from "./mapView";
 
 /** Room colour on the map (the route line and destination marker). */
 const ROUTE_COLOR = "#2563EB";
@@ -36,7 +42,15 @@ interface ApiSearchResult {
 }
 interface ApiRoute {
   id: number;
-  segments: { geometry: { coordinates: number[][] } }[];
+  /** Stairs or elevators out of service (additive to the API design). */
+  notices?: string[];
+  segments: {
+    geometry: { coordinates: number[][] };
+    /** Stairs and lift rides, in order (additive to the API design). */
+    floor_changes?: { transition_type: string }[];
+    /** Each point's building and floor (additive, step 13). */
+    stops?: RouteStop[];
+  }[];
 }
 
 export interface Directory {
@@ -120,16 +134,20 @@ export function useDirectory(building: BuildingConfig) {
   });
 }
 
-/** Rooms matching `query`, best match first (Search API; logged). */
+/** Rooms matching `query`, best match first (Search API; logged). With
+ * `floors` (every building's floors), it searches every building: a visitor
+ * in EYA finds A Building rooms too. */
 export function useRoomSearch(
   building: BuildingConfig,
   directory: Directory | undefined,
   query: string,
-  kioskSessionId: () => string | null
+  kioskSessionId: () => string | null,
+  floors?: ReadonlyMap<number, FloorPlace>
 ) {
   const q = query.trim();
+  const everywhere = !!floors && floors.size > 0;
   return useQuery({
-    queryKey: ["kiosk-search", building.id, q],
+    queryKey: ["kiosk-search", everywhere ? "all" : building.id, q],
     enabled: isApiConfigured() && !!directory && q.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
@@ -138,7 +156,7 @@ export function useRoomSearch(
         `${endpointMap.search.query}?${new URLSearchParams({
           q,
           result_type: "room",
-          area_id: String(directory!.areaId),
+          ...(everywhere ? {} : { area_id: String(directory!.areaId) }),
           // The best matches; looser ones (typos, descriptions) trail off.
           limit: "20",
         })}`,
@@ -146,9 +164,23 @@ export function useRoomSearch(
       );
       return found.results
         .filter(result => result.room)
-        .map(result =>
-          roomDestination(building, directory!.floorObjects, result.room!)
-        );
+        .flatMap(result => {
+          const room = result.room!;
+          if (!everywhere)
+            return [roomDestination(building, directory!.floorObjects, room)];
+          // Each room in its own building (rooms of a building the kiosk
+          // doesn't show are left out).
+          const place = floors!.get(room.floor);
+          return place
+            ? [
+                roomDestination(
+                  place.building,
+                  new Map([[room.floor, place.object]]),
+                  room
+                ),
+              ]
+            : [];
+        });
     },
   });
 }
@@ -158,14 +190,15 @@ export function useRoomSearch(
 export async function fetchRoute(
   building: BuildingConfig,
   originNodeId: number | null | undefined,
-  destination: Destination
+  destination: Destination,
+  registry: readonly BuildingConfig[] = buildings
 ): Promise<Destination | null> {
   if (!originNodeId || !destination.nodeId) return null;
   const route = await apiClient.post<ApiRoute>(endpointMap.navigation.routes, {
     origin_node_id: originNodeId,
     destination_node_ids: [destination.nodeId],
   });
-  return asRoute(building, route, destination);
+  return asRoute(building, route, destination, registry);
 }
 
 interface ApiQueueRoute {
@@ -205,18 +238,22 @@ export async function shortestWalkOrder(
 export async function fetchSavedRoute(
   building: BuildingConfig,
   routeId: number,
-  destination: Destination
+  destination: Destination,
+  registry: readonly BuildingConfig[] = buildings
 ): Promise<Destination | null> {
   const route = await apiClient.get<ApiRoute>(
     endpointMap.navigation.route(String(routeId))
   );
-  return asRoute(building, route, destination);
+  return asRoute(building, route, destination, registry);
 }
 
-function asRoute(
+/** Turns a Navigation API route into the destination's legs, by building
+ * and floor. `registry`: the buildings the kiosk knows (their placements). */
+export function asRoute(
   building: BuildingConfig,
   route: ApiRoute,
-  destination: Destination
+  destination: Destination,
+  registry: readonly BuildingConfig[] = buildings
 ): Destination | null {
   const points = route.segments.flatMap((segment, index) =>
     segment.geometry.coordinates
@@ -224,10 +261,37 @@ function asRoute(
       .map(coordinate => storedToModel(coordinate))
   );
   if (points.length < 2) return null;
+  const stops = route.segments.flatMap((segment, index) =>
+    (segment.stops ?? []).slice(index === 0 ? 0 : 1)
+  );
+  // With each point's building and floor (routes between buildings), split
+  // by those; otherwise by height, within the destination's building.
+  const legs =
+    stops.length === points.length
+      ? splitByStops(registry, points, stops)
+      : splitByFloor(building.model.floors, points);
+  // One ride per change of floor within a building: name each leg's way to
+  // the next floor.
+  const rides = route.segments.flatMap(segment => segment.floor_changes ?? []);
+  const climbs = legs
+    .slice(0, -1)
+    .map((leg, index) => ({ leg, next: legs[index + 1] }))
+    .filter(
+      ({ leg, next }) =>
+        leg.floor !== CAMPUS_FLOOR &&
+        next.floor !== CAMPUS_FLOOR &&
+        leg.building === next.building
+    );
+  if (rides.length === climbs.length) {
+    rides.forEach(
+      (ride, index) => (climbs[index].leg.via = ride.transition_type)
+    );
+  }
   return {
     ...destination,
     points,
-    legs: splitByFloor(building.model.floors, points),
+    legs,
     routeId: route.id,
+    notices: route.notices ?? [],
   };
 }

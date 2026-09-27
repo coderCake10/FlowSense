@@ -3,25 +3,23 @@
 | | |
 |---|---|
 | Reference | `architecture-notes-main/` in `wendy-calma/capstone-flowsense` (requirements, system architecture, app specs, **06 Database/01 Final Database Schema**, **07 API/00 API Design**) |
-| Compared against | `coderCake10/FlowSense` `main` (`856ffc8`) plus step 1 |
+| Compared against | First review: `coderCake10/FlowSense` `main` (`856ffc8`) plus step 1. **Refreshed 2026-09-26** against `main` after step 9a (`249a5be`). |
 | Method | Every Django model was extracted and diffed table by table against the SQL schema. Every mounted route and router registration was compared with the API design, and so was the frontend `endpointMap` (`client/src/lib/api.ts`). App-level specs were checked against the running UI. |
 
 ## Verdict
 
-- **Database: fully conformant after step 4b.** Originally 33 of the spec's 35 tables existed as models
-  and match its names, schemas, and columns. Two tables and one view are
-  missing, and 23 of the 24 `CHECK` constraints exist only as Django
-  `choices`, not in the database.
-- **API: the frontend conforms, the backend drifted.** The frontend endpoint
-  map follows the API design almost exactly (`/api/v1/…`, `/annotations`,
-  `/hardware/devices`). The backend uses different prefixes and names, leaves
-  auth and users unmounted, and has no implementation for 6 of the 14 API
-  areas. **Decision: the API design doc is the contract, and the backend is
-  brought to it** (not the other way round), since the frontend and the doc
-  already agree.
-- **Kiosk UI.** Step 1 originally misread the Navigate and queue flow. That is
-  now fixed to match the spec (see the step 1 change record). Several P1
-  kiosk features in the spec are still missing (below).
+- **Database: fully conformant after step 4b.** At the first review, 33 of
+  the spec's 35 tables existed as models; two tables, one view, and 23 of the
+  24 `CHECK` constraints were missing. Step 4b added all of them.
+- **API: all 14 areas are built.** At the first review the backend used
+  different prefixes and names, left auth and users unmounted, and had no
+  implementation for 6 areas. **Decision: the API design doc is the contract,
+  and the backend is brought to it.** Steps 4a to 11 did that. Every
+  endpoint of the API design is built; the deviations are listed below.
+- **Kiosk UI.** The Navigate and queue flow matches the spec (step 1). The
+  view is isometric and floors open from the model (7b); search and routes
+  come from the API (8a). Still missing from P1: the Location Details
+  sidebar and the Area level (section 4).
 
 ## 1. Database (`06 Database/01 Final Database Schema.md`)
 
@@ -56,6 +54,7 @@ GiST indexes are created automatically by GeoDjango.
 | DB-4 | 24 `CHECK` constraints (area_type, room_type, node_type, direction, device status, roles, and more) | ✓ **Fixed in 4b**: all 24 enforced by PostgreSQL. Was: only `chk_edge_nodes_different`. | Raw SQL, the MQTT consumer, or seed scripts can write invalid values | Add `CheckConstraint`s in a migration |
 | DB-5 | `idx_rooms_search` GIN full-text index | ✓ **Fixed in 4b**. Was: missing. | Search does a full scan (fine at current scale) | `GinIndex(SearchVector(...))` or `RunSQL` |
 | DB-6 | Composite primary keys on room_personnel, hourly_kiosk_statistics, and sensor_statistics | A surrogate `id` plus a `UniqueConstraint` on the same columns | None functionally. This is a deliberate, documented Django trade-off. | Keep; note it in the schema doc |
+| DB-8 | No table for generated reports | ✓ **Added in step 11** (team decision on QA-65): `analytics.reports` with CHECKs on status, format and period. An addition to the spec's schema; nothing existing changed. | Reports work | Add it to `06 Database/01 Final Database Schema.md` |
 | DB-7 | `mac_address MACADDR`, UUID `DEFAULT gen_random_uuid()` | `VARCHAR`, and UUIDs generated in the app with `uuid4` | Low. Only matters for raw SQL inserts. | Optional |
 
 ### Errors in the spec (fix in the notes)
@@ -74,18 +73,18 @@ GiST indexes are created automatically by GeoDjango.
 |---|---|---|---|---|
 | Authentication | `/api/v1/auth/*` | ✓ Mounted and hardened (4a) | ✓ spec | None |
 | Users | `/api/v1/users` | ✓ Mounted (4a) | ✓ spec | None |
-| Map | `/api/v1/map/*` | ✓ (4a) | ✓ spec | None |
-| Navigation | `/api/v1/navigation/*` | ✓ (4a) | ✓ spec | None |
+| Map | `/api/v1/map/*` | ✓ (4a). Additive (step 14): `placement` and `map_settings` on areas (PATCH moves a building's points), `display_name` and `short_name` on floors | ✓ spec | None |
+| Navigation | `/api/v1/navigation/*` | ✓ (4a). Additive (step 12b): `floor_changes` on each route segment (the stairs or lift rides, so directions can name them); (step 12c) `notices` on a route (stairs or elevators out of service); (step 13) `stops` on each segment (each point's building and floor, for routes between buildings) | ✓ spec | None |
 | Search | `/api/v1/search` | ✓ (4a) | ✓ spec | None |
 | Navigation, QR, and kiosk sessions | `/api/v1/sessions/*` | ✓ Implemented and correctly prefixed | ✓ spec | None |
-| Annotation | `/api/v1/annotations/*` | ✓ Renamed (4a) | ✓ spec (plural) | None |
-| Hardware | `/api/v1/hardware/devices…`, `kiosks`, `sensors`, `commands` | `/api/v1/hardware/devices` (4a, admin-only) with list, detail, and register. Kiosks, sensors, observations, statistics, and commands are stubs. | ✓ spec, except `register` points to `/hardware/devices/register` instead of `/devices/{id}/register` | Rename, implement the rest, fix the frontend `register` path |
-| Assets | `/api/v1/assets/*` (16 endpoints) | **Not implemented** | ✓ spec | Build |
-| Analytics | `/api/v1/analytics/*` (13) | **Not implemented** | ✓ spec | Build |
-| Alerts | `/api/v1/alerts/*` (4) | **Not implemented** (the model exists) | ✓ spec | Build |
-| Activity | `/api/v1/activity/*` (2) | **Not implemented** | ✓ spec | Build (after DB-3) |
-| Settings | `/api/v1/settings/*` (8) | **Not implemented** | ✓ spec | Build (after DB-1 and DB-2) |
-| System | `/api/v1/system/status`, `/health` | **Not implemented** | ✓ spec | Build |
+| Annotation | `/api/v1/annotations/*` | ✓ Renamed (4a). Addition (step 12b): `PATCH /annotations/nodes/{id}` moves a point (position, optionally name) and redraws its connections; the spec has no node update, and Map Annotation's drag needs one. Additions (step 14): `/annotations/labels`, `/annotations/floors`, `/annotations/rooms/new`, `/annotations/rooms/{id}/remove`, `/annotations/buildings` (campus editing, adding buildings) | ✓ spec (plural) | Add the PATCH row to the API design |
+| Hardware | `/api/v1/hardware/devices…`, `kiosks`, `sensors`, `commands` | ✓ Devices (list, detail, `/{id}/register`, `/{id}/commands/{command}`, `/{id}/observations`, `/{id}/statistics`), kiosks, sensors (5a), and `POST /hardware/kiosks/heartbeat` (5c, approved addition) | ✓ spec. The page calls `/devices/{id}/register`; the old `endpointMap.hardware.register` entry is unused. | None |
+| Assets | `/api/v1/assets/*` (16 endpoints) | ✓ All 16 (step 10). Additive: `version_id` on activate, `structure` on version detail, `model` on map areas, (step 13) `POST /assets/{id}/deactivate` (Take offline) | ✓ spec | None |
+| Analytics | `/api/v1/analytics/*` (13) | ✓ All 13: overview, dashboard, navigation, search, kiosks, sensors, spatial, system, activity, QR and QR events (step 6); reports (step 11). Deviation: `GET /reports/{id}` returns the snapshot as JSON (the admin app prints it to PDF) or `?download=csv` as a ZIP, not a server-made PDF | ✓ spec | None |
+| Alerts | `/api/v1/alerts/*` (4) | ✓ (5a), with acknowledge and clear | ✓ spec | None |
+| Activity | `/api/v1/activity/*` (2) | ✓ (5a) | ✓ spec | None |
+| Settings | `/api/v1/settings/*` (8) | ✓ (5a), in `common/settings`, including semesters | ✓ spec | None |
+| System | `/api/v1/system/status`, `/health` | ✓ (5a), in `common/system` | ✓ spec | None |
 
 These cut across every area:
 
@@ -102,7 +101,7 @@ These cut across every area:
 | Passwordless admin login with OTP and/or login link | ✓ Both, end to end: emails sent, link sign-in, rate limited (4a) |
 | Short-lived, single-use tokens | ✓ Backend (10-minute TTL, hashed, consumed on use) |
 | Backend rejects unauthenticated admin requests | ✓ Admin-only by default with real 401s (4a) |
-| **Kiosk device authentication** (per-kiosk credentials leading to short-lived kiosk tokens; no credentials stored in React) | **Not implemented.** Kiosk and QR session endpoints are open (no `permission_classes` and no `REST_FRAMEWORK` defaults, so DRF falls back to `AllowAny`). Planned for step 4. |
+| **Kiosk device authentication** (per-kiosk credentials leading to short-lived kiosk tokens; no credentials stored in React) | **Not implemented.** The API is admin-only by default (4a), and the kiosk-facing endpoints (search, sessions, QR, kiosk heartbeat) opt out with `AllowAny`. Kiosks identify themselves by device ID in the heartbeat (5c); the contract's `KioskDeviceToken` exchange is still to be built. |
 | ESP32 per-device MQTT credentials | Partly done. There is a Mosquitto password file; registry checks happen in the consumer. |
 | "Temporary development-only username/password" login allowed | Not needed: the console email backend prints the code locally (4a) |
 
@@ -112,16 +111,16 @@ These cut across every area:
 |---|---|---|
 | Navigate activates the queue; the queue modal lists instructions and shows the QR | P1 | ✓ Step 1 (corrected); real, scannable QR in step 2 |
 | Add to queue button | P1 | ✓ Step 1 |
-| Shortest path shown when a destination is selected | P1 | Partial. The routes are hand-drawn polylines, not backend A*. |
-| **Non-rotatable isometric view** | P1 | ✗ `OrbitControls` allows free rotation ("Drag to rotate") |
-| **Back button through the view hierarchy Area → Building → Floor → Destination** | P1 | ✗ Only "Back" to the attract screen |
-| **Location Details right sidebar** (code, alias, description, personnel and contacts, office hours, image, sticky Add to queue) | P1 | ✗ Only a bottom bar with name and code |
-| Search by room code, alias, **personnel, or building name** | P1 | Partial. The frontend filters name and code locally; the backend search API supports more. |
-| List of locations grouped by building, then floor | P1 | Partial. Only building level. |
+| Shortest path shown when a destination is selected | P1 | ✓ Step 8a/8b: routes come from the backend's A* over the annotated node graph (`navigation/services.py`). Rooms not yet annotated say so. |
+| **Non-rotatable isometric view** | P1 | ✓ Step 7b: the angle from above is locked. Visitors can still turn around the building. |
+| **Back button through the view hierarchy Area → Building → Floor → Destination** | P1 | Partial. Campus → building → floor works through the Campus, Whole building and floor buttons (7b, 9a). There is no Area level yet (QA-26). |
+| **Location Details right sidebar** (code, alias, description, personnel and contacts, office hours, image, sticky Add to queue) | P1 | ✗ Only a bottom bar with name, code, floor and route status (QA-26) |
+| Search by room code, alias, **personnel, or building name** | P1 | Partial. The kiosk uses `GET /search` (8a), which matches room code, alias, description and personnel. Building names aren't searched. |
+| List of locations grouped by building, then floor | P1 | ✓ Grouped by floor for the live building (8a) |
 | Area selection dropdown | P1 | ✓ |
 | Top bar: app name, building and kiosk name, **current time** | P2 | Partial. No time. |
-| Exterior-shell reveal animation; floor focus with fading | P2 | ✗ |
-| Queue modal auto-closes on idle or on QR scan | P2 | ✗ Needs the backend scan event (QA-30, step 4) |
+| Exterior-shell reveal animation; floor focus with fading | P2 | ✓ Step 7b: the exterior and the floors above lift away |
+| Queue modal auto-closes on idle or on QR scan | P2 | ✗ Needs the backend scan event (QA-30) |
 
 ## 4b. Mobile handoff (`04 Application/01 Mobile Handoff`)
 
@@ -131,19 +130,19 @@ These cut across every area:
 | Dynamic update on BLE detection from ESP32 sensors | P1 | ✗ Manual "I've arrived" for now (QA-29) |
 | Arrival confirmation modal | P2 | ✓ Step 2 |
 | Sticky button to reopen it after cancelling (grays out when out of range) | P2 | ✓ Step 2, shown only after cancel. "Out of range" needs BLE. |
-| Loading page with a progress bar | P2 | Partial. Route loader text only; the progress bar is deferred to the backend transport. |
-| QR Sessions API (`/sessions`, `/scan`) | n/a | Shape mirrored by `lib/handoff.ts`; the local transport is used until step 4 |
+| Loading page with a progress bar | P2 | ✓ Step 8d: loading page (team wireframe) |
+| QR Sessions API (`/sessions`, `/scan`) | n/a | ✓ Built (`fs_sessions`). The phone receives the kiosk's real route (8d). |
 
 ## 5. Technology stack (`01 Technology/00 Tech Stack.md`)
 
 | Spec | Current | Note |
 |---|---|---|
 | React Router | `wouter` | Fine (lighter, same role). Update the notes. |
-| Zustand, TanStack Query | Installed, **unused** | Use TanStack Query when wiring the API in step 4 |
+| Zustand, TanStack Query | TanStack Query is used for every admin API call (5b). Zustand is installed but unused. | Fine; add Zustand only when shared client state needs it |
 | React PWA for the mobile handoff | `manifest.json` only; no service worker | The handoff works as a plain web page (step 2). Installable PWA and offline support are deferred; they aren't needed for a single visit. |
-| **Draco compression** for GLB | **Not used.** `eya-floor-1.glb` is **57 MB** (19 textures); `a-building.glb` is 1.5 MB | Kiosk load time and memory risk. Compress in step 3. |
+| **Draco compression** for GLB | ✓ Step 7a: `EYA.glb` 17 MB, `A.glb` 0.7 MB, `CAMPUS.glb` 0.05 MB, all Draco; the decoder is served from `public/draco/` | None |
 | Recast / three-pathfinding (navmesh) | Not used | Conflicts with the schema and backend, which use a **node/edge graph with A*** (`navigation.nodes`/`edges`, `navigation/services.py`). **Recommendation:** the graph plus A* is the source of truth; mark navmesh as optional in the notes. |
-| Celery beat for cleanup and analytics | ✓ Cleanup tasks scheduled and registered (4a); analytics aggregation comes with the Analytics API |
+| Celery beat for cleanup and analytics | ✓ Cleanup tasks (4a), offline-device marking, informational-alert clearing and trend alerts (5a, 6). No task fills `hourly_kiosk_statistics` or `sensor_statistics`; the Analytics API aggregates on request. |
 
 **Additions and substitutions, decided by the team on 2026-09-24**
 ([decision record](../changes/step-04-stack-decisions.md)):
@@ -158,7 +157,10 @@ These cut across every area:
 | Workflow Engine ("Django App (workflow)") | Listed in the notes | **Out of scope** (decided 2026-09-25): enrollment and clearance are only example reasons a visitor uses the kiosk. Nothing is built for it. |
 | iPad as the kiosk | HR-01 to HR-06 specify a dedicated kiosk PC with a 21–24" touchscreen | **Temporary**, for the presentation and defense only. HR-01 to HR-06 stay as the handover requirement; the client provides the kiosk device. |
 
-## Impact on the roadmap
+## Impact on the roadmap (first review, kept for history)
+
+These were the plans at the first review. Steps 2 to 9a carried them out,
+except the items still marked open above.
 
 - **Step 2 (QR handoff).** Use the spec's QR session contract
   (`POST /api/v1/sessions` → `/sessions/{id}/scan`) as the target shape, even

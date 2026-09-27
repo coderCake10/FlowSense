@@ -23,14 +23,16 @@ import {
   visitorSessionId,
 } from "@/lib/kioskDevice";
 import { ApiError, isApiConfigured } from "@/lib/api";
+import { createQrSession, wasScanned, type QrSession } from "@/lib/qrSessions";
 import {
   fetchRoute,
   shortestWalkOrder,
   useDirectory,
   useRoomSearch,
 } from "@/lib/kioskDirectory";
-import { buildings } from "@/data/buildings";
+import { useBuildingRegistry } from "@/lib/buildingRegistry";
 import type { Destination } from "@/data/navigation";
+import { crossesBuildings, legName } from "@/lib/mapView";
 import {
   activateQueue,
   addToQueue,
@@ -62,7 +64,14 @@ type RouteStatus = "ready" | "loading" | "unmapped" | "unreachable" | "failed";
 const freshHandoff = () => ({ id: newSessionId(), issuedAt: Date.now() });
 
 export function KioskPage() {
-  const [building, setBuilding] = useState(buildings[0]);
+  // The buildings: bundled at once, then with the API's (placements, names,
+  // buildings added from the admin panel). The first is the kiosk's own:
+  // routes start there.
+  const { buildings, floors } = useBuildingRegistry();
+  const home = buildings[0];
+  const [buildingId, setBuildingId] = useState(buildings[0].id);
+  const building =
+    buildings.find(item => item.id === buildingId) ?? buildings[0];
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Destination | null>(null);
   const [active, setActive] = useState(false);
@@ -72,6 +81,15 @@ export function KioskPage() {
   /** Off: Navigate arranges the stops for the shortest walk. */
   const [keepOrder, setKeepOrder] = useState(false);
   const [arranging, setArranging] = useState(false);
+  /** Bumped by "Follow on this kiosk": the map plays the route from its
+   * first floor. */
+  const [playKey, setPlayKey] = useState(0);
+  /** The server's QR session for the open handoff (counted in Analytics),
+   * and whether a phone has scanned it. */
+  const [qr, setQr] = useState<{ handoff: string; session: QrSession } | null>(
+    null
+  );
+  const [scannedQr, setScannedQr] = useState<string | null>(null);
   /** Handoff session for the open queue modal; issued when the modal opens. */
   const [handoff, setHandoff] = useState<{
     id: string;
@@ -111,7 +129,8 @@ export function KioskPage() {
     building,
     directory.data,
     query,
-    visitorSessionId
+    visitorSessionId,
+    floors
   );
   const live = isApiConfigured() && !!directory.data;
   const searching =
@@ -160,7 +179,7 @@ export function KioskPage() {
       }
       setRouteStatus(shown ? "ready" : status);
     };
-    fetchRoute(building, kiosk?.map_node_id, destination).then(
+    fetchRoute(building, kiosk?.map_node_id, destination, buildings).then(
       routed => settle(routed, "unmapped"),
       // 422: both ends are on the map, but no walkway connects them yet.
       error =>
@@ -172,6 +191,18 @@ export function KioskPage() {
         )
     );
   };
+  /** Shows another building's rooms (the list, or a tap in the campus view). */
+  const pickBuilding = (id: string) => {
+    const next = buildings.find(item => item.id === id);
+    if (!next || next.id === building.id) return;
+    setBuildingId(next.id);
+    setSearch("");
+    setSelected(null);
+    setActive(false);
+    setKeyboard(false);
+    setQueue([]);
+    setQueueOpen(false);
+  };
   const upNext = nextStop(queue, selected?.id ?? null);
   const handoffLink =
     handoff && queue.length
@@ -180,7 +211,8 @@ export function KioskPage() {
             building,
             queue,
             handoff.issuedAt,
-            handoff.id
+            handoff.id,
+            qr?.handoff === handoff.id ? qr.session : null
           );
           return {
             url: handoffUrl(payload, publicBaseUrl()),
@@ -191,6 +223,38 @@ export function KioskPage() {
           };
         })()
       : null;
+
+  // Each QR shown opens a QR session on the server (Analytics: QR shown), for
+  // the route of the stop being started.
+  const handoffId = handoff?.id ?? null;
+  const handoffRoute = queue.find(item => item.routeId)?.routeId ?? null;
+  useEffect(() => {
+    if (!live || !handoffId || !handoffRoute) return;
+    let current = true;
+    void createQrSession(handoffRoute, visitorSessionId()).then(session => {
+      if (current && session) setQr({ handoff: handoffId, session });
+    });
+    return () => {
+      current = false;
+    };
+  }, [live, handoffId, handoffRoute]);
+  // While the QR is on screen, notice the phone scanning it (spec P2: the
+  // queue window closes itself).
+  const watchedQr =
+    queueOpen && qr && qr.handoff === handoffId ? qr.session.id : null;
+  useEffect(() => {
+    if (!watchedQr) return;
+    const timer = setInterval(() => {
+      void wasScanned(watchedQr).then(scanned => {
+        if (!scanned) return;
+        clearInterval(timer);
+        setScannedQr(watchedQr);
+        toast.success("Opened on your phone");
+        setTimeout(() => setQueueOpen(false), 2500);
+      });
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [watchedQr]);
 
   const startNavigation = (destination: Destination) => {
     show(destination, true);
@@ -268,9 +332,9 @@ export function KioskPage() {
           </div>
         </div>
         <p className="text-right text-sm">
-          {building.name}{" "}
+          {home.name}{" "}
           <span className="block text-xs text-[#718398]">
-            {building.floor} · {building.startLabel}
+            {home.floor} · {home.startLabel}
           </span>
         </p>
       </header>
@@ -299,7 +363,7 @@ export function KioskPage() {
               aria-label="Search destinations"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search name or room code"
+              placeholder="Search any building: name or room code"
               className="h-9 w-full rounded-md border border-[#17365d] bg-white pl-10 pr-3 text-xs text-[#17365d]"
             />
           </label>
@@ -312,24 +376,12 @@ export function KioskPage() {
           <select
             aria-label="Building"
             value={building.id}
-            onChange={event => {
-              const next = buildings.find(
-                item => item.id === event.target.value
-              );
-              if (!next) return;
-              setBuilding(next);
-              setSearch("");
-              setSelected(null);
-              setActive(false);
-              setKeyboard(false);
-              setQueue([]);
-              setQueueOpen(false);
-            }}
+            onChange={event => pickBuilding(event.target.value)}
             className="mt-3 h-9 w-full border border-[#17365d] bg-white px-2 text-xs text-[#17365d]"
           >
             {buildings.map(item => (
               <option key={item.id} value={item.id}>
-                {item.name} · {item.floor}
+                {item === home ? `${item.name} · ${item.floor}` : item.name}
               </option>
             ))}
           </select>
@@ -359,6 +411,7 @@ export function KioskPage() {
                     {d.name}
                   </span>
                   <span className="text-[10px] uppercase text-white/48">
+                    {d.building !== building.name && `${d.building} · `}
                     {d.floor}
                     {isQueued(queue, d.id) && " · In queue"}
                   </span>
@@ -380,7 +433,7 @@ export function KioskPage() {
               Starting point
             </p>
             <p className="mt-2 text-white/65">
-              {building.startLabel} · {building.floor}
+              {home.startLabel} · {home.name}, {home.floor.toLowerCase()}
             </p>
           </div>
         </aside>
@@ -390,6 +443,9 @@ export function KioskPage() {
               key={building.id}
               building={building}
               destination={selected}
+              playing={active}
+              playKey={playKey}
+              onPickBuilding={pickBuilding}
             />
           </div>
           <div
@@ -408,6 +464,9 @@ export function KioskPage() {
                   </p>
                   <h2 className="mt-1 text-lg font-bold">{selected.name}</h2>
                   <p className="mt-1 text-sm text-[#718398]">
+                    {selected.building && selected.building !== building.name
+                      ? `${selected.building} · `
+                      : ""}
                     {selected.floor || building.floor} ·{" "}
                     {routeStatus === "loading"
                       ? "Finding the route…"
@@ -418,15 +477,17 @@ export function KioskPage() {
                           : routeStatus === "failed"
                             ? "The route couldn't be loaded. Try again."
                             : (selected.legs?.length ?? 0) > 1
-                              ? `From ${building.startLabel}: ${selected
-                                  .legs!.map(
-                                    leg =>
-                                      building.model.floors.find(
-                                        f => f.object === leg.floor
-                                      )?.name
+                              ? `From ${home.startLabel}: ${selected
+                                  .legs!.map(leg =>
+                                    legName(
+                                      leg,
+                                      building,
+                                      buildings,
+                                      crossesBuildings(selected.legs!)
+                                    )
                                   )
                                   .join(" → ")}`
-                              : `From ${building.startLabel} to the destination`}
+                              : `From ${home.startLabel} to the destination`}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -586,6 +647,14 @@ export function KioskPage() {
                         data-handoff-url={handoffLink.url}
                       />
                     </div>
+                    {watchedQr && scannedQr === watchedQr && (
+                      <p
+                        role="status"
+                        className="mt-3 rounded-md bg-[#e5f4ec] px-2 py-1 text-xs font-bold text-[#168051]"
+                      >
+                        Opened on your phone
+                      </p>
+                    )}
                     <p className="mt-3 text-xs leading-5 text-[#718398]">
                       Scan with your phone camera to get this checklist of{" "}
                       {queue.length} {queue.length === 1 ? "stop" : "stops"}.
@@ -618,7 +687,10 @@ export function KioskPage() {
             )}
             {active ? (
               <button
-                onClick={() => setQueueOpen(false)}
+                onClick={() => {
+                  setQueueOpen(false);
+                  setPlayKey(k => k + 1);
+                }}
                 className="flex items-center gap-2 rounded-lg bg-[#17365d] px-5 py-3 text-sm font-bold text-white"
               >
                 Follow on this kiosk

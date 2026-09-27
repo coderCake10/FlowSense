@@ -102,6 +102,34 @@ describe("resolveHandoff", () => {
     expect(result.session.expiresAt.getTime()).toBe(NOW + 900_000);
   });
 
+  it("carries the server's QR session to the phone, when there is one", () => {
+    const withSession = createHandoff(
+      building,
+      [building.destinations[0]],
+      NOW,
+      "s2",
+      { id: "0b6f5c1e-0000-4000-8000-000000000001", token: "secret-token" }
+    );
+    const result = resolveHandoff(
+      encodeHandoff(withSession),
+      registry,
+      NOW + 1000
+    );
+    expect(result.status === "ok" && result.session.qr).toEqual({
+      id: "0b6f5c1e-0000-4000-8000-000000000001",
+      token: "secret-token",
+    });
+    // Without one (offline kiosk) the link still works.
+    const offline = resolveHandoff(token, registry, NOW + 1000);
+    expect(offline.status === "ok" && offline.session.qr).toBeUndefined();
+    // A malformed session is refused like any other tampering.
+    const bad = encodeHandoff({
+      ...withSession,
+      q: ["", ""] as unknown as [string, string],
+    });
+    expect(resolveHandoff(bad, registry, NOW).status).toBe("invalid");
+  });
+
   it("reports a missing token", () => {
     expect(resolveHandoff(null, registry, NOW).status).toBe("missing");
   });

@@ -100,9 +100,10 @@ class DashboardApiTests(TestCase):
         self.assertEqual(len(body["kiosk_activity"]), 7)
         self.assertEqual(body["kiosk_activity"][-1]["sessions"], 1)
         self.assertEqual(body["failed_searches"], [{"query": "guidanse", "count": 2}])
-        self.assertEqual(body["summary"]["buildings"], 1)
-        self.assertEqual(body["summary"]["floors"], 6)
-        self.assertEqual(body["summary"]["rooms"], 92)
+        # The EYA and A Buildings (seed_campus).
+        self.assertEqual(body["summary"]["buildings"], 2)
+        self.assertEqual(body["summary"]["floors"], 10)
+        self.assertEqual(body["summary"]["rooms"], 145)
         for key in ("crowd_density", "top_destinations", "alerts", "recent_activity"):
             self.assertIn(key, body)
 
@@ -134,6 +135,9 @@ class DateRangeTests(TestCase):
         self.assertEqual(len(parse_range({"range": "last_30_days"}).days), 30)
         custom = parse_range({"range": "custom", "start_date": "2026-08-10", "end_date": "2026-08-12"})
         self.assertEqual([str(d) for d in custom.days], ["2026-08-10", "2026-08-11", "2026-08-12"])
+        # A date-only end covers that whole day (it used to stop at its midnight).
+        end = timezone.localtime(custom.end)
+        self.assertEqual((end.date().isoformat(), end.hour, end.minute), ("2026-08-12", 23, 59))
         for bad in ({"range": "yesterday"}, {"range": "custom"}, {"range": "semester", "semester_id": "999"},
                     {"range": "custom", "start_date": "2026-08-12", "end_date": "2026-08-10"}):
             with self.assertRaises(ValidationError):
@@ -326,3 +330,109 @@ class TrendAlertTests(TestCase):
         SearchEvent.objects.all().delete()
         Alert.objects.all().delete()
         self.assertNotIn("High failed-search rate", alert_service.evaluate_trends(now))
+
+
+import io
+import zipfile
+from datetime import datetime
+
+from django.test import override_settings
+
+from analytics.models import Report
+
+
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+class ReportApiTests(TestCase):
+    """Reports are snapshots of the chosen sections (analytics/reports.py)."""
+
+    def setUp(self):
+        self.admin = sign_in_as_admin(self.client)
+        today = timezone.localdate()
+        self.period = {"start_date": (today - timedelta(days=2)).isoformat(), "end_date": today.isoformat()}
+        SearchEvent.objects.create(query_text="Registrar", result_count=1, resolved=True)
+        SearchEvent.objects.create(query_text="guidanse", result_count=0, resolved=False)
+
+    def generate(self, **fields):
+        body = {**self.period, "sections": ["search", "system"], **fields}
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(f"{API}/analytics/reports", body, content_type="application/json")
+        self.assertEqual(response.status_code, 202, response.content)
+        return data(self.client.get(f"{API}/analytics/reports/{data(response)['id']}"))
+
+    def figure(self, report, section, label):
+        blocks = next(s for s in report["data"]["sections"] if s["id"] == section)["blocks"]
+        return next(i["value"] for b in blocks if b["kind"] == "metrics" for i in b["items"] if i["label"] == label)
+
+    def test_generates_the_chosen_sections(self):
+        report = self.generate()
+        self.assertEqual(report["status"], "completed")
+        self.assertEqual([s["id"] for s in report["data"]["sections"]], ["search", "system"])
+        self.assertEqual(self.figure(report, "search", "Total searches"), 2)
+        self.assertEqual(self.figure(report, "search", "Failed"), 1)
+        failed = next(b for s in report["data"]["sections"] for b in s["blocks"]
+                      if b.get("title") == "Most frequent failed searches")
+        self.assertEqual(failed["rows"][0]["query"], "guidanse")
+        # Figures the system doesn't record come through as notes, not zeros.
+        notes = [b["text"] for s in report["data"]["sections"] for b in s["blocks"] if b["kind"] == "note"]
+        self.assertTrue(any("API requests aren't logged" in n for n in notes))
+        self.assertEqual(report["generated_by"]["id"], self.admin.id)
+        today = timezone.localdate()
+        self.assertTrue(report["period_label"].endswith(f"to {today:%b} {today.day}, {today.year}"))
+        self.assertEqual(report["data"]["period"]["label"], report["period_label"])
+        # The period's last day is included whole.
+        end = timezone.localtime(datetime.fromisoformat(report["period_end"]))
+        self.assertEqual((end.date(), end.hour, end.minute), (timezone.localdate(), 23, 59))
+
+    def test_a_report_keeps_its_figures(self):
+        report = self.generate()
+        SearchEvent.objects.create(query_text="Library", result_count=1, resolved=True)
+        again = data(self.client.get(f"{API}/analytics/reports/{report['id']}"))
+        self.assertEqual(self.figure(again, "search", "Total searches"), 2)
+        self.assertEqual(self.figure(self.generate(), "search", "Total searches"), 3)
+
+    def test_empty_tables_say_why(self):
+        report = self.generate(sections=["kiosks"])
+        availability = next(b for b in report["data"]["sections"][0]["blocks"] if b.get("title") == "Kiosk availability")
+        self.assertEqual(availability["rows"], [])
+        self.assertEqual(availability["empty"], "No registered kiosks.")
+
+    def test_csv_download_is_a_zip_of_sections(self):
+        report = self.generate(format="csv")
+        response = self.client.get(f"{API}/analytics/reports/{report['id']}?download=csv")
+        self.assertEqual(response["Content-Type"], "application/zip")
+        archive = zipfile.ZipFile(io.BytesIO(response.content))
+        names = archive.namelist()
+        self.assertIn("00-summary.csv", names)
+        self.assertIn("01-search-search-activity.csv", names)
+        figures = archive.read("01-search-search-activity.csv").decode("utf-8-sig")
+        self.assertIn("Total searches,2,", figures)
+        failed = next(n for n in names if "failed-searches" in n)
+        self.assertIn("guidanse,1,", archive.read(failed).decode("utf-8-sig"))
+
+    def test_list_omits_snapshots_and_validates_requests(self):
+        self.generate()
+        listed = data(self.client.get(f"{API}/analytics/reports"))
+        self.assertEqual(listed[0]["section_titles"], ["Search", "System performance"])
+        self.assertNotIn("data", listed[0])
+        bad = self.client.post(f"{API}/analytics/reports", {**self.period, "sections": ["weather"]},
+                               content_type="application/json")
+        self.assertEqual(bad.status_code, 400)
+        backwards = self.client.post(f"{API}/analytics/reports",
+                                     {"start_date": "2026-09-26", "end_date": "2026-09-20", "sections": ["search"]},
+                                     content_type="application/json")
+        self.assertEqual(backwards.status_code, 400)
+        scheduled = self.client.post(f"{API}/analytics/reports",
+                                     {**self.period, "sections": ["search"], "schedule": {"frequency": "daily"}},
+                                     content_type="application/json")
+        self.assertIn("Scheduled reports", error(scheduled)["message"])
+        self.assertEqual(AuditEvent.objects.filter(action="create", entity_type="report").count(), 1)
+
+    def test_csv_of_an_unfinished_report_is_refused(self):
+        report = Report.objects.create(title="t", sections=["search"], period_start=timezone.now(),
+                                       period_end=timezone.now(), generated_by=self.admin)
+        response = self.client.get(f"{API}/analytics/reports/{report.pk}?download=csv")
+        self.assertEqual(response.status_code, 409)
+
+    def test_admin_only(self):
+        self.client.cookies.clear()
+        self.assertEqual(self.client.get(f"{API}/analytics/reports").status_code, 401)

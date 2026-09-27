@@ -1,0 +1,2416 @@
+{
+ "source": "CAPSTONE EYA2.blend",
+ "generated_by": "frontend/scripts/blender/build_navigation.py",
+ "coordinates": "kiosk model (glTF): metres, Y up",
+ "floors": [
+  {
+   "floor": 1,
+   "nodes": [
+    {
+     "key": "1F-EA-101A",
+     "name": "EA-101A door",
+     "type": "room",
+     "room": "EA-101A",
+     "position": [
+      -5.48,
+      1.027,
+      31.747
+     ]
+    },
+    {
+     "key": "kiosk",
+     "name": "EYA lobby kiosk",
+     "type": "kiosk",
+     "position": [
+      0.0,
+      1.027,
+      28.5
+     ]
+    },
+    {
+     "key": "1F-EA-114",
+     "name": "EA-114 door",
+     "type": "room",
+     "room": "EA-114",
+     "position": [
+      5.41,
+      1.027,
+      27.903
+     ]
+    },
+    {
+     "key": "1F-c004",
+     "name": "1F corridor 4",
+     "type": "auxiliary",
+     "position": [
+      -3.422,
+      1.027,
+      26.463
+     ]
+    },
+    {
+     "key": "1F-c005",
+     "name": "1F corridor 5",
+     "type": "auxiliary",
+     "position": [
+      -3.422,
+      1.027,
+      25.863
+     ]
+    },
+    {
+     "key": "1F-c006",
+     "name": "1F corridor 6",
+     "type": "auxiliary",
+     "position": [
+      5.178,
+      1.027,
+      25.863
+     ]
+    },
+    {
+     "key": "1F-c007",
+     "name": "1F corridor 7",
+     "type": "auxiliary",
+     "position": [
+      -3.422,
+      1.027,
+      24.463
+     ]
+    },
+    {
+     "key": "1F-EA-101B",
+     "name": "EA-101B door",
+     "type": "room",
+     "room": "EA-101B",
+     "position": [
+      -5.346,
+      1.027,
+      24.247
+     ]
+    },
+    {
+     "key": "1F-c009",
+     "name": "1F corridor 9",
+     "type": "auxiliary",
+     "position": [
+      -3.422,
+      1.027,
+      23.063
+     ]
+    },
+    {
+     "key": "1F-elevator",
+     "name": "Elevator (1F)",
+     "type": "auxiliary",
+     "role": "elevator",
+     "position": [
+      -0.022,
+      1.027,
+      22.863
+     ]
+    },
+    {
+     "key": "1F-EA-113",
+     "name": "EA-113 door",
+     "type": "room",
+     "room": "EA-113",
+     "position": [
+      5.345,
+      1.027,
+      21.636
+     ]
+    },
+    {
+     "key": "1F-EA-102",
+     "name": "EA-102 door",
+     "type": "room",
+     "room": "EA-102",
+     "position": [
+      -5.35,
+      1.027,
+      16.367
+     ]
+    },
+    {
+     "key": "1F-c013",
+     "name": "1F corridor 13",
+     "type": "auxiliary",
+     "position": [
+      -4.022,
+      1.027,
+      15.663
+     ]
+    },
+    {
+     "key": "1F-c014",
+     "name": "1F corridor 14",
+     "type": "auxiliary",
+     "position": [
+      -4.022,
+      1.027,
+      14.463
+     ]
+    },
+    {
+     "key": "1F-front-stairs",
+     "name": "Front stairs (1F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      -0.222,
+      1.027,
+      12.063
+     ]
+    },
+    {
+     "key": "1F-EA-112",
+     "name": "EA-112 door",
+     "type": "room",
+     "room": "EA-112",
+     "position": [
+      5.345,
+      1.027,
+      9.19
+     ]
+    },
+    {
+     "key": "1F-c017",
+     "name": "1F corridor 17",
+     "type": "auxiliary",
+     "position": [
+      -3.422,
+      1.027,
+      8.063
+     ]
+    },
+    {
+     "key": "1F-EA-111",
+     "name": "EA-111 door",
+     "type": "room",
+     "room": "EA-111",
+     "position": [
+      5.345,
+      1.027,
+      1.983
+     ]
+    },
+    {
+     "key": "1F-EA-103",
+     "name": "EA-103 door",
+     "type": "room",
+     "room": "EA-103",
+     "position": [
+      -5.35,
+      1.027,
+      -0.514
+     ]
+    },
+    {
+     "key": "1F-EA-104",
+     "name": "EA-104 door",
+     "type": "room",
+     "room": "EA-104",
+     "position": [
+      -5.35,
+      1.027,
+      -6.324
+     ]
+    },
+    {
+     "key": "1F-c021",
+     "name": "1F corridor 21",
+     "type": "auxiliary",
+     "position": [
+      -3.822,
+      1.027,
+      -10.937
+     ]
+    },
+    {
+     "key": "1F-EA-110",
+     "name": "EA-110 door",
+     "type": "room",
+     "room": "EA-110",
+     "position": [
+      5.345,
+      1.027,
+      -11.851
+     ]
+    },
+    {
+     "key": "1F-c023",
+     "name": "1F corridor 23",
+     "type": "auxiliary",
+     "position": [
+      3.378,
+      1.027,
+      -17.737
+     ]
+    },
+    {
+     "key": "1F-EA-105",
+     "name": "EA-105 door",
+     "type": "room",
+     "room": "EA-105",
+     "position": [
+      -5.35,
+      1.027,
+      -18.55
+     ]
+    },
+    {
+     "key": "1F-c025",
+     "name": "1F corridor 25",
+     "type": "auxiliary",
+     "position": [
+      3.378,
+      1.027,
+      -21.937
+     ]
+    },
+    {
+     "key": "1F-back-stairs",
+     "name": "Back stairs (1F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      0.178,
+      1.027,
+      -22.337
+     ]
+    },
+    {
+     "key": "1F-c027",
+     "name": "1F corridor 27",
+     "type": "auxiliary",
+     "position": [
+      -3.222,
+      1.027,
+      -24.137
+     ]
+    },
+    {
+     "key": "1F-EA-106",
+     "name": "EA-106 door",
+     "type": "room",
+     "room": "EA-106",
+     "position": [
+      -4.871,
+      1.027,
+      -28.573
+     ]
+    },
+    {
+     "key": "1F-EA-107",
+     "name": "EA-107 door",
+     "type": "room",
+     "room": "EA-107",
+     "position": [
+      -3.033,
+      1.027,
+      -28.569
+     ]
+    },
+    {
+     "key": "1F-EA-108",
+     "name": "EA-108 door",
+     "type": "room",
+     "room": "EA-108",
+     "position": [
+      -1.394,
+      1.027,
+      -28.573
+     ]
+    },
+    {
+     "key": "1F-EA-109",
+     "name": "EA-109 door",
+     "type": "room",
+     "room": "EA-109",
+     "position": [
+      4.905,
+      1.027,
+      -28.57
+     ]
+    }
+   ],
+   "edges": [
+    [
+     "1F-EA-101A",
+     "kiosk"
+    ],
+    [
+     "1F-EA-101B",
+     "1F-c007"
+    ],
+    [
+     "1F-EA-102",
+     "1F-c007"
+    ],
+    [
+     "1F-EA-103",
+     "1F-c005"
+    ],
+    [
+     "1F-EA-104",
+     "1F-c014"
+    ],
+    [
+     "1F-EA-105",
+     "1F-c014"
+    ],
+    [
+     "1F-EA-106",
+     "1F-c014"
+    ],
+    [
+     "1F-EA-107",
+     "1F-c021"
+    ],
+    [
+     "1F-EA-108",
+     "1F-c027"
+    ],
+    [
+     "1F-EA-109",
+     "1F-c023"
+    ],
+    [
+     "1F-EA-110",
+     "1F-c006"
+    ],
+    [
+     "1F-EA-111",
+     "1F-c006"
+    ],
+    [
+     "1F-EA-112",
+     "1F-c006"
+    ],
+    [
+     "1F-EA-113",
+     "1F-c006"
+    ],
+    [
+     "1F-EA-114",
+     "kiosk"
+    ],
+    [
+     "1F-back-stairs",
+     "1F-c025"
+    ],
+    [
+     "1F-c004",
+     "1F-c005"
+    ],
+    [
+     "1F-c004",
+     "1F-c007"
+    ],
+    [
+     "1F-c004",
+     "1F-c009"
+    ],
+    [
+     "1F-c004",
+     "1F-c014"
+    ],
+    [
+     "1F-c004",
+     "kiosk"
+    ],
+    [
+     "1F-c005",
+     "1F-c013"
+    ],
+    [
+     "1F-c006",
+     "kiosk"
+    ],
+    [
+     "1F-c009",
+     "1F-elevator"
+    ],
+    [
+     "1F-c009",
+     "1F-front-stairs"
+    ],
+    [
+     "1F-c013",
+     "1F-c017"
+    ],
+    [
+     "1F-c014",
+     "1F-c021"
+    ],
+    [
+     "1F-c017",
+     "1F-c023"
+    ],
+    [
+     "1F-c021",
+     "1F-c027"
+    ],
+    [
+     "1F-c023",
+     "1F-c025"
+    ]
+   ]
+  },
+  {
+   "floor": 2,
+   "nodes": [
+    {
+     "key": "2F-EA-201",
+     "name": "EA-201 door",
+     "type": "room",
+     "room": "EA-201",
+     "position": [
+      -5.334,
+      4.519,
+      26.512
+     ]
+    },
+    {
+     "key": "2F-EA-216",
+     "name": "EA-216 door",
+     "type": "room",
+     "room": "EA-216",
+     "position": [
+      5.341,
+      4.519,
+      26.518
+     ]
+    },
+    {
+     "key": "2F-EA-202",
+     "name": "EA-202 door",
+     "type": "room",
+     "room": "EA-202",
+     "position": [
+      -5.334,
+      4.519,
+      24.645
+     ]
+    },
+    {
+     "key": "2F-c004",
+     "name": "2F corridor 4",
+     "type": "auxiliary",
+     "position": [
+      -3.351,
+      4.519,
+      23.003
+     ]
+    },
+    {
+     "key": "2F-c005",
+     "name": "2F corridor 5",
+     "type": "auxiliary",
+     "position": [
+      3.449,
+      4.519,
+      23.003
+     ]
+    },
+    {
+     "key": "2F-elevator",
+     "name": "Elevator (2F)",
+     "type": "auxiliary",
+     "role": "elevator",
+     "position": [
+      0.049,
+      4.519,
+      22.803
+     ]
+    },
+    {
+     "key": "2F-EA-215",
+     "name": "EA-215 door",
+     "type": "room",
+     "room": "EA-215",
+     "position": [
+      5.324,
+      4.519,
+      18.799
+     ]
+    },
+    {
+     "key": "2F-c008",
+     "name": "2F corridor 8",
+     "type": "auxiliary",
+     "position": [
+      -3.951,
+      4.519,
+      15.603
+     ]
+    },
+    {
+     "key": "2F-c009",
+     "name": "2F corridor 9",
+     "type": "auxiliary",
+     "position": [
+      4.049,
+      4.519,
+      15.603
+     ]
+    },
+    {
+     "key": "2F-c010",
+     "name": "2F corridor 10",
+     "type": "auxiliary",
+     "position": [
+      4.049,
+      4.519,
+      14.603
+     ]
+    },
+    {
+     "key": "2F-front-stairs",
+     "name": "Front stairs (2F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      3.049,
+      4.519,
+      12.003
+     ]
+    },
+    {
+     "key": "2F-EA-214",
+     "name": "EA-214 door",
+     "type": "room",
+     "room": "EA-214",
+     "position": [
+      5.324,
+      4.519,
+      11.602
+     ]
+    },
+    {
+     "key": "2F-EA-203",
+     "name": "EA-203 door",
+     "type": "room",
+     "room": "EA-203",
+     "position": [
+      -5.334,
+      4.519,
+      9.3
+     ]
+    },
+    {
+     "key": "2F-EA-213",
+     "name": "EA-213 door",
+     "type": "room",
+     "room": "EA-213",
+     "position": [
+      5.324,
+      4.519,
+      4.471
+     ]
+    },
+    {
+     "key": "2F-EA-204",
+     "name": "EA-204 door",
+     "type": "room",
+     "room": "EA-204",
+     "position": [
+      -5.332,
+      4.519,
+      2.063
+     ]
+    },
+    {
+     "key": "2F-EA-207",
+     "name": "EA-207 door",
+     "type": "room",
+     "room": "EA-207",
+     "position": [
+      -5.06,
+      4.519,
+      0.363
+     ]
+    },
+    {
+     "key": "2F-EA-212",
+     "name": "EA-212 door",
+     "type": "room",
+     "room": "EA-212",
+     "position": [
+      5.324,
+      4.519,
+      -2.69
+     ]
+    },
+    {
+     "key": "2F-EA-205",
+     "name": "EA-205 door",
+     "type": "room",
+     "room": "EA-205",
+     "position": [
+      -5.334,
+      4.519,
+      -5.106
+     ]
+    },
+    {
+     "key": "2F-EA-211",
+     "name": "EA-211 door",
+     "type": "room",
+     "room": "EA-211",
+     "position": [
+      5.324,
+      4.519,
+      -10.461
+     ]
+    },
+    {
+     "key": "2F-EA-206",
+     "name": "EA-206 door",
+     "type": "room",
+     "room": "EA-206",
+     "position": [
+      -5.334,
+      4.519,
+      -12.289
+     ]
+    },
+    {
+     "key": "2F-EA-210B",
+     "name": "EA-210B door",
+     "type": "room",
+     "room": "EA-210B",
+     "position": [
+      5.324,
+      4.519,
+      -18.213
+     ]
+    },
+    {
+     "key": "2F-EA-208",
+     "name": "EA-208 door",
+     "type": "room",
+     "room": "EA-208",
+     "position": [
+      -5.334,
+      4.519,
+      -18.262
+     ]
+    },
+    {
+     "key": "2F-back-stairs",
+     "name": "Back stairs (2F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      3.049,
+      4.519,
+      -22.197
+     ]
+    },
+    {
+     "key": "2F-EA-210A",
+     "name": "EA-210A door",
+     "type": "room",
+     "room": "EA-210A",
+     "position": [
+      5.324,
+      4.519,
+      -25.974
+     ]
+    },
+    {
+     "key": "2F-EA-209",
+     "name": "EA-209 door",
+     "type": "room",
+     "room": "EA-209",
+     "position": [
+      3.895,
+      4.519,
+      -28.557
+     ]
+    }
+   ],
+   "edges": [
+    [
+     "2F-EA-201",
+     "2F-c004"
+    ],
+    [
+     "2F-EA-202",
+     "2F-c004"
+    ],
+    [
+     "2F-EA-203",
+     "2F-c008"
+    ],
+    [
+     "2F-EA-204",
+     "2F-c008"
+    ],
+    [
+     "2F-EA-205",
+     "2F-c008"
+    ],
+    [
+     "2F-EA-206",
+     "2F-c008"
+    ],
+    [
+     "2F-EA-207",
+     "2F-c008"
+    ],
+    [
+     "2F-EA-208",
+     "2F-c008"
+    ],
+    [
+     "2F-EA-209",
+     "2F-c009"
+    ],
+    [
+     "2F-EA-210A",
+     "2F-c009"
+    ],
+    [
+     "2F-EA-210B",
+     "2F-c009"
+    ],
+    [
+     "2F-EA-211",
+     "2F-c009"
+    ],
+    [
+     "2F-EA-212",
+     "2F-back-stairs"
+    ],
+    [
+     "2F-EA-212",
+     "2F-c009"
+    ],
+    [
+     "2F-EA-213",
+     "2F-c009"
+    ],
+    [
+     "2F-EA-214",
+     "2F-c009"
+    ],
+    [
+     "2F-EA-215",
+     "2F-elevator"
+    ],
+    [
+     "2F-EA-216",
+     "2F-c005"
+    ],
+    [
+     "2F-c004",
+     "2F-elevator"
+    ],
+    [
+     "2F-c005",
+     "2F-elevator"
+    ],
+    [
+     "2F-c008",
+     "2F-elevator"
+    ],
+    [
+     "2F-c009",
+     "2F-c010"
+    ],
+    [
+     "2F-c009",
+     "2F-elevator"
+    ],
+    [
+     "2F-c010",
+     "2F-front-stairs"
+    ]
+   ]
+  },
+  {
+   "floor": 3,
+   "nodes": [
+    {
+     "key": "3F-EA-301",
+     "name": "EA-301 door",
+     "type": "room",
+     "room": "EA-301",
+     "position": [
+      -5.329,
+      8.096,
+      26.627
+     ]
+    },
+    {
+     "key": "3F-EA-317",
+     "name": "EA-317 door",
+     "type": "room",
+     "room": "EA-317",
+     "position": [
+      5.324,
+      8.096,
+      24.737
+     ]
+    },
+    {
+     "key": "3F-EA-302",
+     "name": "EA-302 door",
+     "type": "room",
+     "room": "EA-302",
+     "position": [
+      -5.329,
+      8.096,
+      24.637
+     ]
+    },
+    {
+     "key": "3F-c004",
+     "name": "3F corridor 4",
+     "type": "auxiliary",
+     "position": [
+      -3.351,
+      8.096,
+      22.975
+     ]
+    },
+    {
+     "key": "3F-c005",
+     "name": "3F corridor 5",
+     "type": "auxiliary",
+     "position": [
+      3.449,
+      8.096,
+      22.975
+     ]
+    },
+    {
+     "key": "3F-elevator",
+     "name": "Elevator (3F)",
+     "type": "auxiliary",
+     "role": "elevator",
+     "position": [
+      0.049,
+      8.096,
+      22.775
+     ]
+    },
+    {
+     "key": "3F-EA-316",
+     "name": "EA-316 door",
+     "type": "room",
+     "room": "EA-316",
+     "position": [
+      5.324,
+      8.096,
+      17.666
+     ]
+    },
+    {
+     "key": "3F-EA-303",
+     "name": "EA-303 door",
+     "type": "room",
+     "room": "EA-303",
+     "position": [
+      -5.329,
+      8.096,
+      16.766
+     ]
+    },
+    {
+     "key": "3F-front-stairs",
+     "name": "Front stairs (3F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      0.049,
+      8.096,
+      15.775
+     ]
+    },
+    {
+     "key": "3F-c010",
+     "name": "3F corridor 10",
+     "type": "auxiliary",
+     "position": [
+      -3.951,
+      8.096,
+      15.575
+     ]
+    },
+    {
+     "key": "3F-c011",
+     "name": "3F corridor 11",
+     "type": "auxiliary",
+     "position": [
+      4.049,
+      8.096,
+      15.575
+     ]
+    },
+    {
+     "key": "3F-EA-315",
+     "name": "EA-315 door",
+     "type": "room",
+     "room": "EA-315",
+     "position": [
+      5.324,
+      8.096,
+      10.47
+     ]
+    },
+    {
+     "key": "3F-EA-304",
+     "name": "EA-304 door",
+     "type": "room",
+     "room": "EA-304",
+     "position": [
+      -5.329,
+      8.096,
+      9.297
+     ]
+    },
+    {
+     "key": "3F-EA-314",
+     "name": "EA-314 door",
+     "type": "room",
+     "room": "EA-314",
+     "position": [
+      5.324,
+      8.096,
+      3.339
+     ]
+    },
+    {
+     "key": "3F-EA-305",
+     "name": "EA-305 door",
+     "type": "room",
+     "room": "EA-305",
+     "position": [
+      -5.329,
+      8.096,
+      2.063
+     ]
+    },
+    {
+     "key": "3F-c016",
+     "name": "3F corridor 16",
+     "type": "auxiliary",
+     "position": [
+      5.324,
+      8.096,
+      -2.689
+     ]
+    },
+    {
+     "key": "3F-EA-313",
+     "name": "EA-313 door",
+     "type": "room",
+     "room": "EA-313",
+     "position": [
+      5.324,
+      8.096,
+      -3.822
+     ]
+    },
+    {
+     "key": "3F-EA-306",
+     "name": "EA-306 door",
+     "type": "room",
+     "room": "EA-306",
+     "position": [
+      -5.329,
+      8.096,
+      -5.106
+     ]
+    },
+    {
+     "key": "3F-EA-312",
+     "name": "EA-312 door",
+     "type": "room",
+     "room": "EA-312",
+     "position": [
+      5.324,
+      8.096,
+      -11.593
+     ]
+    },
+    {
+     "key": "3F-EA-307",
+     "name": "EA-307 door",
+     "type": "room",
+     "room": "EA-307",
+     "position": [
+      -5.329,
+      8.096,
+      -12.29
+     ]
+    },
+    {
+     "key": "3F-EA-311",
+     "name": "EA-311 door",
+     "type": "room",
+     "room": "EA-311",
+     "position": [
+      5.324,
+      8.096,
+      -19.345
+     ]
+    },
+    {
+     "key": "3F-back-stairs",
+     "name": "Back stairs (3F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      3.049,
+      8.096,
+      -22.225
+     ]
+    },
+    {
+     "key": "3F-EA-308",
+     "name": "EA-308 door",
+     "type": "room",
+     "room": "EA-308",
+     "position": [
+      -5.329,
+      8.096,
+      -25.328
+     ]
+    },
+    {
+     "key": "3F-EA-310",
+     "name": "EA-310 door",
+     "type": "room",
+     "room": "EA-310",
+     "position": [
+      5.06,
+      8.096,
+      -26.649
+     ]
+    },
+    {
+     "key": "3F-EA-309",
+     "name": "EA-309 door",
+     "type": "room",
+     "room": "EA-309",
+     "position": [
+      -5.32,
+      8.096,
+      -27.883
+     ]
+    }
+   ],
+   "edges": [
+    [
+     "3F-EA-301",
+     "3F-c004"
+    ],
+    [
+     "3F-EA-302",
+     "3F-c004"
+    ],
+    [
+     "3F-EA-303",
+     "3F-elevator"
+    ],
+    [
+     "3F-EA-304",
+     "3F-c010"
+    ],
+    [
+     "3F-EA-305",
+     "3F-c010"
+    ],
+    [
+     "3F-EA-306",
+     "3F-c010"
+    ],
+    [
+     "3F-EA-307",
+     "3F-c010"
+    ],
+    [
+     "3F-EA-308",
+     "3F-c010"
+    ],
+    [
+     "3F-EA-309",
+     "3F-c010"
+    ],
+    [
+     "3F-EA-310",
+     "3F-c011"
+    ],
+    [
+     "3F-EA-311",
+     "3F-c011"
+    ],
+    [
+     "3F-EA-312",
+     "3F-c011"
+    ],
+    [
+     "3F-EA-313",
+     "3F-c011"
+    ],
+    [
+     "3F-EA-314",
+     "3F-c011"
+    ],
+    [
+     "3F-EA-315",
+     "3F-c011"
+    ],
+    [
+     "3F-EA-316",
+     "3F-elevator"
+    ],
+    [
+     "3F-EA-317",
+     "3F-c005"
+    ],
+    [
+     "3F-back-stairs",
+     "3F-c016"
+    ],
+    [
+     "3F-c004",
+     "3F-elevator"
+    ],
+    [
+     "3F-c005",
+     "3F-elevator"
+    ],
+    [
+     "3F-c010",
+     "3F-elevator"
+    ],
+    [
+     "3F-c011",
+     "3F-c016"
+    ],
+    [
+     "3F-c011",
+     "3F-elevator"
+    ],
+    [
+     "3F-elevator",
+     "3F-front-stairs"
+    ]
+   ]
+  },
+  {
+   "floor": 4,
+   "nodes": [
+    {
+     "key": "4F-EA-401",
+     "name": "EA-401 door",
+     "type": "room",
+     "room": "EA-401",
+     "position": [
+      4.459,
+      11.619,
+      27.466
+     ]
+    },
+    {
+     "key": "4F-EA-402",
+     "name": "EA-402 door",
+     "type": "room",
+     "room": "EA-402",
+     "position": [
+      -5.356,
+      11.619,
+      26.579
+     ]
+    },
+    {
+     "key": "4F-EA-418",
+     "name": "EA-418 door",
+     "type": "room",
+     "room": "EA-418",
+     "position": [
+      5.342,
+      11.619,
+      26.359
+     ]
+    },
+    {
+     "key": "4F-EA-417",
+     "name": "EA-417 door",
+     "type": "room",
+     "room": "EA-417",
+     "position": [
+      5.342,
+      11.619,
+      24.766
+     ]
+    },
+    {
+     "key": "4F-c005",
+     "name": "4F corridor 5",
+     "type": "auxiliary",
+     "position": [
+      -3.351,
+      11.619,
+      23.175
+     ]
+    },
+    {
+     "key": "4F-c006",
+     "name": "4F corridor 6",
+     "type": "auxiliary",
+     "position": [
+      3.449,
+      11.619,
+      23.175
+     ]
+    },
+    {
+     "key": "4F-elevator",
+     "name": "Elevator (4F)",
+     "type": "auxiliary",
+     "role": "elevator",
+     "position": [
+      0.049,
+      11.619,
+      22.775
+     ]
+    },
+    {
+     "key": "4F-EA-403",
+     "name": "EA-403 door",
+     "type": "room",
+     "room": "EA-403",
+     "position": [
+      -5.342,
+      11.619,
+      19.137
+     ]
+    },
+    {
+     "key": "4F-EA-404",
+     "name": "EA-404 door",
+     "type": "room",
+     "room": "EA-404",
+     "position": [
+      -5.342,
+      11.619,
+      17.888
+     ]
+    },
+    {
+     "key": "4F-front-stairs",
+     "name": "Front stairs (4F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      0.049,
+      11.619,
+      15.775
+     ]
+    },
+    {
+     "key": "4F-c011",
+     "name": "4F corridor 11",
+     "type": "auxiliary",
+     "position": [
+      -3.951,
+      11.619,
+      15.575
+     ]
+    },
+    {
+     "key": "4F-c012",
+     "name": "4F corridor 12",
+     "type": "auxiliary",
+     "position": [
+      4.049,
+      11.619,
+      15.575
+     ]
+    },
+    {
+     "key": "4F-EA-416",
+     "name": "EA-416 door",
+     "type": "room",
+     "room": "EA-416",
+     "position": [
+      5.342,
+      11.619,
+      13.26
+     ]
+    },
+    {
+     "key": "4F-EA-405",
+     "name": "EA-405 door",
+     "type": "room",
+     "room": "EA-405",
+     "position": [
+      -5.342,
+      11.619,
+      2.045
+     ]
+    },
+    {
+     "key": "4F-EA-415",
+     "name": "EA-415 door",
+     "type": "room",
+     "room": "EA-415",
+     "position": [
+      5.342,
+      11.619,
+      1.43
+     ]
+    },
+    {
+     "key": "4F-c016",
+     "name": "4F corridor 16",
+     "type": "auxiliary",
+     "position": [
+      5.342,
+      11.619,
+      -4.988
+     ]
+    },
+    {
+     "key": "4F-EA-406",
+     "name": "EA-406 door",
+     "type": "room",
+     "room": "EA-406",
+     "position": [
+      -5.342,
+      11.619,
+      -5.353
+     ]
+    },
+    {
+     "key": "4F-EA-414",
+     "name": "EA-414 door",
+     "type": "room",
+     "room": "EA-414",
+     "position": [
+      5.342,
+      11.619,
+      -6.059
+     ]
+    },
+    {
+     "key": "4F-EA-407",
+     "name": "EA-407 door",
+     "type": "room",
+     "room": "EA-407",
+     "position": [
+      -5.342,
+      11.619,
+      -12.659
+     ]
+    },
+    {
+     "key": "4F-EA-413",
+     "name": "EA-413 door",
+     "type": "room",
+     "room": "EA-413",
+     "position": [
+      5.342,
+      11.619,
+      -13.516
+     ]
+    },
+    {
+     "key": "4F-EA-408",
+     "name": "EA-408 door",
+     "type": "room",
+     "room": "EA-408",
+     "position": [
+      -5.342,
+      11.619,
+      -20.13
+     ]
+    },
+    {
+     "key": "4F-EA-412",
+     "name": "EA-412 door",
+     "type": "room",
+     "room": "EA-412",
+     "position": [
+      5.342,
+      11.619,
+      -20.854
+     ]
+    },
+    {
+     "key": "4F-back-stairs",
+     "name": "Back stairs (4F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      3.049,
+      11.619,
+      -22.225
+     ]
+    },
+    {
+     "key": "4F-EA-409",
+     "name": "EA-409 door",
+     "type": "room",
+     "room": "EA-409",
+     "position": [
+      -5.342,
+      11.619,
+      -26.481
+     ]
+    },
+    {
+     "key": "4F-EA-411",
+     "name": "EA-411 door",
+     "type": "room",
+     "room": "EA-411",
+     "position": [
+      5.342,
+      11.619,
+      -26.814
+     ]
+    },
+    {
+     "key": "4F-EA-410",
+     "name": "EA-410 door",
+     "type": "room",
+     "room": "EA-410",
+     "position": [
+      3.918,
+      11.619,
+      -28.557
+     ]
+    }
+   ],
+   "edges": [
+    [
+     "4F-EA-401",
+     "4F-c006"
+    ],
+    [
+     "4F-EA-402",
+     "4F-c005"
+    ],
+    [
+     "4F-EA-403",
+     "4F-elevator"
+    ],
+    [
+     "4F-EA-404",
+     "4F-elevator"
+    ],
+    [
+     "4F-EA-405",
+     "4F-c011"
+    ],
+    [
+     "4F-EA-406",
+     "4F-c011"
+    ],
+    [
+     "4F-EA-407",
+     "4F-c011"
+    ],
+    [
+     "4F-EA-408",
+     "4F-c011"
+    ],
+    [
+     "4F-EA-409",
+     "4F-c011"
+    ],
+    [
+     "4F-EA-410",
+     "4F-c012"
+    ],
+    [
+     "4F-EA-411",
+     "4F-c012"
+    ],
+    [
+     "4F-EA-412",
+     "4F-c012"
+    ],
+    [
+     "4F-EA-413",
+     "4F-c012"
+    ],
+    [
+     "4F-EA-414",
+     "4F-c012"
+    ],
+    [
+     "4F-EA-415",
+     "4F-c012"
+    ],
+    [
+     "4F-EA-416",
+     "4F-elevator"
+    ],
+    [
+     "4F-EA-417",
+     "4F-c006"
+    ],
+    [
+     "4F-EA-418",
+     "4F-c006"
+    ],
+    [
+     "4F-back-stairs",
+     "4F-c016"
+    ],
+    [
+     "4F-c005",
+     "4F-elevator"
+    ],
+    [
+     "4F-c006",
+     "4F-elevator"
+    ],
+    [
+     "4F-c011",
+     "4F-elevator"
+    ],
+    [
+     "4F-c012",
+     "4F-c016"
+    ],
+    [
+     "4F-c012",
+     "4F-elevator"
+    ],
+    [
+     "4F-elevator",
+     "4F-front-stairs"
+    ]
+   ]
+  },
+  {
+   "floor": 5,
+   "nodes": [
+    {
+     "key": "5F-EA-501",
+     "name": "EA-501 door",
+     "type": "room",
+     "room": "EA-501",
+     "position": [
+      -4.528,
+      15.176,
+      27.452
+     ]
+    },
+    {
+     "key": "5F-EA-517",
+     "name": "EA-517 door",
+     "type": "room",
+     "room": "EA-517",
+     "position": [
+      4.451,
+      15.176,
+      27.452
+     ]
+    },
+    {
+     "key": "5F-EA-516",
+     "name": "EA-516 door",
+     "type": "room",
+     "room": "EA-516",
+     "position": [
+      5.342,
+      15.176,
+      26.355
+     ]
+    },
+    {
+     "key": "5F-EA-515",
+     "name": "EA-515 door",
+     "type": "room",
+     "room": "EA-515",
+     "position": [
+      5.342,
+      15.176,
+      24.763
+     ]
+    },
+    {
+     "key": "5F-c005",
+     "name": "5F corridor 5",
+     "type": "auxiliary",
+     "position": [
+      -3.289,
+      15.176,
+      23.132
+     ]
+    },
+    {
+     "key": "5F-c006",
+     "name": "5F corridor 6",
+     "type": "auxiliary",
+     "position": [
+      3.311,
+      15.176,
+      23.132
+     ]
+    },
+    {
+     "key": "5F-elevator",
+     "name": "Elevator (5F)",
+     "type": "auxiliary",
+     "role": "elevator",
+     "position": [
+      -0.089,
+      15.176,
+      22.932
+     ]
+    },
+    {
+     "key": "5F-EA-502",
+     "name": "EA-502 door",
+     "type": "room",
+     "room": "EA-502",
+     "position": [
+      -5.342,
+      15.176,
+      19.113
+     ]
+    },
+    {
+     "key": "5F-EA-503",
+     "name": "EA-503 door",
+     "type": "room",
+     "room": "EA-503",
+     "position": [
+      -5.342,
+      15.176,
+      17.874
+     ]
+    },
+    {
+     "key": "5F-c010",
+     "name": "5F corridor 10",
+     "type": "auxiliary",
+     "position": [
+      -3.689,
+      15.176,
+      16.532
+     ]
+    },
+    {
+     "key": "5F-c011",
+     "name": "5F corridor 11",
+     "type": "auxiliary",
+     "position": [
+      3.711,
+      15.176,
+      16.532
+     ]
+    },
+    {
+     "key": "5F-c012",
+     "name": "5F corridor 12",
+     "type": "auxiliary",
+     "position": [
+      -3.889,
+      15.176,
+      15.732
+     ]
+    },
+    {
+     "key": "5F-front-stairs",
+     "name": "Front stairs (5F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      -0.089,
+      15.176,
+      15.732
+     ]
+    },
+    {
+     "key": "5F-c014",
+     "name": "5F corridor 14",
+     "type": "auxiliary",
+     "position": [
+      3.911,
+      15.176,
+      15.732
+     ]
+    },
+    {
+     "key": "5F-EA-504",
+     "name": "EA-504 door",
+     "type": "room",
+     "room": "EA-504",
+     "position": [
+      -5.342,
+      15.176,
+      14.105
+     ]
+    },
+    {
+     "key": "5F-EA-514",
+     "name": "EA-514 door",
+     "type": "room",
+     "room": "EA-514",
+     "position": [
+      5.342,
+      15.176,
+      13.257
+     ]
+    },
+    {
+     "key": "5F-EA-505",
+     "name": "EA-505 door",
+     "type": "room",
+     "room": "EA-505",
+     "position": [
+      -5.342,
+      15.176,
+      2.021
+     ]
+    },
+    {
+     "key": "5F-EA-513",
+     "name": "EA-513 door",
+     "type": "room",
+     "room": "EA-513",
+     "position": [
+      5.342,
+      15.176,
+      1.426
+     ]
+    },
+    {
+     "key": "5F-EA-506",
+     "name": "EA-506 door",
+     "type": "room",
+     "room": "EA-506",
+     "position": [
+      -5.342,
+      15.176,
+      -5.377
+     ]
+    },
+    {
+     "key": "5F-EA-512",
+     "name": "EA-512 door",
+     "type": "room",
+     "room": "EA-512",
+     "position": [
+      5.342,
+      15.176,
+      -6.062
+     ]
+    },
+    {
+     "key": "5F-c021",
+     "name": "5F corridor 21",
+     "type": "auxiliary",
+     "position": [
+      -3.889,
+      15.176,
+      -10.868
+     ]
+    },
+    {
+     "key": "5F-EA-507",
+     "name": "EA-507 door",
+     "type": "room",
+     "room": "EA-507",
+     "position": [
+      -5.342,
+      15.176,
+      -12.683
+     ]
+    },
+    {
+     "key": "5F-EA-511",
+     "name": "EA-511 door",
+     "type": "room",
+     "room": "EA-511",
+     "position": [
+      5.342,
+      15.176,
+      -13.519
+     ]
+    },
+    {
+     "key": "5F-c024",
+     "name": "5F corridor 24",
+     "type": "auxiliary",
+     "position": [
+      -3.689,
+      15.176,
+      -18.868
+     ]
+    },
+    {
+     "key": "5F-EA-508",
+     "name": "EA-508 door",
+     "type": "room",
+     "room": "EA-508",
+     "position": [
+      -5.342,
+      15.176,
+      -20.154
+     ]
+    },
+    {
+     "key": "5F-EA-510",
+     "name": "EA-510 door",
+     "type": "room",
+     "room": "EA-510",
+     "position": [
+      5.342,
+      15.176,
+      -20.857
+     ]
+    },
+    {
+     "key": "5F-back-stairs",
+     "name": "Back stairs (5F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      -3.089,
+      15.176,
+      -22.268
+     ]
+    },
+    {
+     "key": "5F-EA-509",
+     "name": "EA-509 door",
+     "type": "room",
+     "room": "EA-509",
+     "position": [
+      -3.938,
+      15.176,
+      -28.571
+     ]
+    }
+   ],
+   "edges": [
+    [
+     "5F-EA-501",
+     "5F-c005"
+    ],
+    [
+     "5F-EA-502",
+     "5F-elevator"
+    ],
+    [
+     "5F-EA-503",
+     "5F-elevator"
+    ],
+    [
+     "5F-EA-504",
+     "5F-elevator"
+    ],
+    [
+     "5F-EA-505",
+     "5F-c010"
+    ],
+    [
+     "5F-EA-506",
+     "5F-c012"
+    ],
+    [
+     "5F-EA-507",
+     "5F-c012"
+    ],
+    [
+     "5F-EA-508",
+     "5F-c012"
+    ],
+    [
+     "5F-EA-509",
+     "5F-c012"
+    ],
+    [
+     "5F-EA-510",
+     "5F-c014"
+    ],
+    [
+     "5F-EA-511",
+     "5F-c014"
+    ],
+    [
+     "5F-EA-512",
+     "5F-c014"
+    ],
+    [
+     "5F-EA-513",
+     "5F-c011"
+    ],
+    [
+     "5F-EA-514",
+     "5F-c011"
+    ],
+    [
+     "5F-EA-515",
+     "5F-c006"
+    ],
+    [
+     "5F-EA-516",
+     "5F-c006"
+    ],
+    [
+     "5F-EA-517",
+     "5F-c006"
+    ],
+    [
+     "5F-back-stairs",
+     "5F-c024"
+    ],
+    [
+     "5F-c005",
+     "5F-elevator"
+    ],
+    [
+     "5F-c006",
+     "5F-elevator"
+    ],
+    [
+     "5F-c010",
+     "5F-c012"
+    ],
+    [
+     "5F-c010",
+     "5F-elevator"
+    ],
+    [
+     "5F-c011",
+     "5F-c014"
+    ],
+    [
+     "5F-c011",
+     "5F-elevator"
+    ],
+    [
+     "5F-c012",
+     "5F-c021"
+    ],
+    [
+     "5F-c021",
+     "5F-c024"
+    ],
+    [
+     "5F-elevator",
+     "5F-front-stairs"
+    ]
+   ]
+  },
+  {
+   "floor": 6,
+   "nodes": [
+    {
+     "key": "6F-EA-601",
+     "name": "EA-601 door",
+     "type": "room",
+     "room": "EA-601",
+     "position": [
+      -4.538,
+      18.633,
+      27.452
+     ]
+    },
+    {
+     "key": "6F-EA-613",
+     "name": "EA-613 door",
+     "type": "room",
+     "room": "EA-613",
+     "position": [
+      4.447,
+      18.633,
+      27.513
+     ]
+    },
+    {
+     "key": "6F-EA-602",
+     "name": "EA-602 door",
+     "type": "room",
+     "room": "EA-602",
+     "position": [
+      -5.356,
+      18.633,
+      26.58
+     ]
+    },
+    {
+     "key": "6F-EA-612",
+     "name": "EA-612 door",
+     "type": "room",
+     "room": "EA-612",
+     "position": [
+      5.342,
+      18.633,
+      24.785
+     ]
+    },
+    {
+     "key": "6F-EA-603",
+     "name": "EA-603 door",
+     "type": "room",
+     "room": "EA-603",
+     "position": [
+      -5.342,
+      18.633,
+      24.372
+     ]
+    },
+    {
+     "key": "6F-c006",
+     "name": "6F corridor 6",
+     "type": "auxiliary",
+     "position": [
+      -3.352,
+      18.633,
+      23.14
+     ]
+    },
+    {
+     "key": "6F-c007",
+     "name": "6F corridor 7",
+     "type": "auxiliary",
+     "position": [
+      3.448,
+      18.633,
+      23.14
+     ]
+    },
+    {
+     "key": "6F-elevator",
+     "name": "Elevator (6F)",
+     "type": "auxiliary",
+     "role": "elevator",
+     "position": [
+      0.048,
+      18.633,
+      22.94
+     ]
+    },
+    {
+     "key": "6F-c009",
+     "name": "6F corridor 9",
+     "type": "auxiliary",
+     "position": [
+      -3.952,
+      18.633,
+      15.74
+     ]
+    },
+    {
+     "key": "6F-front-stairs",
+     "name": "Front stairs (6F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      0.048,
+      18.633,
+      15.74
+     ]
+    },
+    {
+     "key": "6F-c011",
+     "name": "6F corridor 11",
+     "type": "auxiliary",
+     "position": [
+      4.048,
+      18.633,
+      15.74
+     ]
+    },
+    {
+     "key": "6F-EA-611",
+     "name": "EA-611 door",
+     "type": "room",
+     "room": "EA-611",
+     "position": [
+      5.342,
+      18.633,
+      12.176
+     ]
+    },
+    {
+     "key": "6F-EA-604",
+     "name": "EA-604 door",
+     "type": "room",
+     "room": "EA-604",
+     "position": [
+      -5.342,
+      18.633,
+      11.611
+     ]
+    },
+    {
+     "key": "6F-EA-610",
+     "name": "EA-610 door",
+     "type": "room",
+     "room": "EA-610",
+     "position": [
+      5.342,
+      18.633,
+      -0.423
+     ]
+    },
+    {
+     "key": "6F-EA-605",
+     "name": "EA-605 door",
+     "type": "room",
+     "room": "EA-605",
+     "position": [
+      -5.342,
+      18.633,
+      -1.029
+     ]
+    },
+    {
+     "key": "6F-c016",
+     "name": "6F corridor 16",
+     "type": "auxiliary",
+     "position": [
+      -3.752,
+      18.633,
+      -12.06
+     ]
+    },
+    {
+     "key": "6F-EA-609",
+     "name": "EA-609 door",
+     "type": "room",
+     "room": "EA-609",
+     "position": [
+      5.342,
+      18.633,
+      -13.543
+     ]
+    },
+    {
+     "key": "6F-EA-606",
+     "name": "EA-606 door",
+     "type": "room",
+     "room": "EA-606",
+     "position": [
+      -5.342,
+      18.633,
+      -13.881
+     ]
+    },
+    {
+     "key": "6F-c019",
+     "name": "6F corridor 19",
+     "type": "auxiliary",
+     "position": [
+      -3.352,
+      18.633,
+      -13.86
+     ]
+    },
+    {
+     "key": "6F-back-stairs",
+     "name": "Back stairs (6F)",
+     "type": "auxiliary",
+     "role": "stairs",
+     "position": [
+      0.048,
+      18.633,
+      -17.86
+     ]
+    },
+    {
+     "key": "6F-EA-608",
+     "name": "EA-608 door",
+     "type": "room",
+     "room": "EA-608",
+     "position": [
+      5.06,
+      18.633,
+      -25.289
+     ]
+    },
+    {
+     "key": "6F-EA-607",
+     "name": "EA-607 door",
+     "type": "room",
+     "room": "EA-607",
+     "position": [
+      5.324,
+      18.633,
+      -25.962
+     ]
+    }
+   ],
+   "edges": [
+    [
+     "6F-EA-601",
+     "6F-c006"
+    ],
+    [
+     "6F-EA-602",
+     "6F-front-stairs"
+    ],
+    [
+     "6F-EA-603",
+     "6F-front-stairs"
+    ],
+    [
+     "6F-EA-604",
+     "6F-c009"
+    ],
+    [
+     "6F-EA-605",
+     "6F-c009"
+    ],
+    [
+     "6F-EA-606",
+     "6F-c009"
+    ],
+    [
+     "6F-EA-607",
+     "6F-c011"
+    ],
+    [
+     "6F-EA-608",
+     "6F-c011"
+    ],
+    [
+     "6F-EA-609",
+     "6F-c011"
+    ],
+    [
+     "6F-EA-610",
+     "6F-c011"
+    ],
+    [
+     "6F-EA-611",
+     "6F-c011"
+    ],
+    [
+     "6F-EA-612",
+     "6F-front-stairs"
+    ],
+    [
+     "6F-EA-613",
+     "6F-c007"
+    ],
+    [
+     "6F-back-stairs",
+     "6F-c019"
+    ],
+    [
+     "6F-c006",
+     "6F-front-stairs"
+    ],
+    [
+     "6F-c007",
+     "6F-front-stairs"
+    ],
+    [
+     "6F-c009",
+     "6F-c016"
+    ],
+    [
+     "6F-c009",
+     "6F-elevator"
+    ],
+    [
+     "6F-c011",
+     "6F-elevator"
+    ],
+    [
+     "6F-c016",
+     "6F-c019"
+    ],
+    [
+     "6F-elevator",
+     "6F-front-stairs"
+    ]
+   ]
+  }
+ ],
+ "transitions": [
+  {
+   "type": "stairs",
+   "from": "1F-front-stairs",
+   "to": "2F-front-stairs"
+  },
+  {
+   "type": "stairs",
+   "from": "2F-front-stairs",
+   "to": "3F-front-stairs"
+  },
+  {
+   "type": "stairs",
+   "from": "3F-front-stairs",
+   "to": "4F-front-stairs"
+  },
+  {
+   "type": "stairs",
+   "from": "4F-front-stairs",
+   "to": "5F-front-stairs"
+  },
+  {
+   "type": "stairs",
+   "from": "5F-front-stairs",
+   "to": "6F-front-stairs"
+  },
+  {
+   "type": "stairs",
+   "from": "1F-back-stairs",
+   "to": "2F-back-stairs"
+  },
+  {
+   "type": "stairs",
+   "from": "2F-back-stairs",
+   "to": "3F-back-stairs"
+  },
+  {
+   "type": "stairs",
+   "from": "3F-back-stairs",
+   "to": "4F-back-stairs"
+  },
+  {
+   "type": "stairs",
+   "from": "4F-back-stairs",
+   "to": "5F-back-stairs"
+  },
+  {
+   "type": "stairs",
+   "from": "5F-back-stairs",
+   "to": "6F-back-stairs"
+  },
+  {
+   "type": "elevator",
+   "from": "1F-elevator",
+   "to": "2F-elevator"
+  },
+  {
+   "type": "elevator",
+   "from": "2F-elevator",
+   "to": "3F-elevator"
+  },
+  {
+   "type": "elevator",
+   "from": "3F-elevator",
+   "to": "4F-elevator"
+  },
+  {
+   "type": "elevator",
+   "from": "4F-elevator",
+   "to": "5F-elevator"
+  },
+  {
+   "type": "elevator",
+   "from": "5F-elevator",
+   "to": "6F-elevator"
+  }
+ ],
+ "problems": []
+}
